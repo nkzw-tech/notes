@@ -1,0 +1,23 @@
+src/sidebarWidth.test.ts
+  s_271efbd84b9f02::t_2b83aa78428ace 1-47
+src/useResizableSidebar.ts
+  s_271efbd84b9f02::t_9260da82588d75 1-71
+src/sidebarWidth.ts
+  s_271efbd84b9f02::t_251435de562723 1-34
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "2e55d0e56ba236e8a3f042c772564dcb5f7637aa",
+  "prompts": {},
+  "sessions": {
+    "s_271efbd84b9f02": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a040e9-dc72-7e81-8b02-286d17405ede",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Christoph Nakazawa <cnakazawa@cloudflare.com>"
+    }
+  }
+}
