@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <style>
+    .page { fill: #fffaf3; }
+    .line { stroke: #5d3510; }
+    @media (prefers-color-scheme: dark) {
+      .page { fill: #2b2118; }
+      .line { stroke: #ffd9a5; }
+    }
+  </style>
+  <rect width="64" height="64" rx="18" fill="#c56e0e"/>
+  <path class="page" d="M17 12h23l9 9v31H17z"/>
+  <path fill="#e5a04d" d="M40 12v10h9z"/>
+  <path class="line" fill="none" stroke-linecap="round" stroke-width="3.5" d="M25 29h16M25 37h16M25 45h11"/>
+</svg>
