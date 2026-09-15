@@ -1,11 +1,11 @@
 :root {
-  --accent: #c56e0e;
-  --accent-soft: rgb(197 110 14 / 0.1);
+  --accent: color-mix(in srgb, var(--system-accent, Highlight) 85%, black);
+  --accent-soft: color-mix(in srgb, var(--accent) 10%, transparent);
   --app-bg: #f8f8f6;
   --card-bg: rgb(255 255 255 / 0.78);
   --card-border: rgb(17 17 17 / 0.09);
   --code-bg: rgb(242 242 242);
-  --focus: #3d87f5;
+  --focus: var(--accent);
   --hover: rgb(127 127 127 / 0.09);
   --muted: rgb(17 17 17 / 0.48);
   --sidebar-bg: rgb(255 255 255 / 0.58);
@@ -14,7 +14,7 @@
   --sidebar-vibrancy-tint: rgb(255 255 255 / 0.34);
   --table-stripe: rgb(127 127 127 / 0.035);
   --text: #111;
-  --selection: rgb(61 135 245 / 0.1);
+  --selection: color-mix(in srgb, var(--accent) 10%, transparent);
   color-scheme: light;
   font-family:
     Inter,
@@ -30,8 +30,7 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --accent: #eb9a3d;
-    --accent-soft: rgb(235 154 61 / 0.11);
+    --accent-soft: color-mix(in srgb, var(--accent) 11%, transparent);
     --app-bg: #141414;
     --card-bg: rgb(38 38 38 / 0.72);
     --card-border: rgb(230 230 230 / 0.1);
@@ -44,7 +43,7 @@
     --sidebar-vibrancy-tint: rgb(255 255 255 / 0.06);
     --table-stripe: rgb(255 255 255 / 0.025);
     --text: rgb(230 230 230);
-    --selection: rgb(61 135 245 / 0.14);
+    --selection: color-mix(in srgb, var(--accent) 14%, transparent);
     color-scheme: dark;
   }
 }
@@ -141,7 +140,7 @@ svg {
 }
 
 ::selection {
-  background: rgb(61 135 245 / 0.24);
+  background: color-mix(in srgb, var(--accent) 24%, transparent);
 }
 
 .app-shell {
@@ -245,7 +244,7 @@ html[data-meetings-platform="darwin"] a {
 }
 
 .search:focus-within {
-  box-shadow: 0 0 0 2px rgb(61 135 245 / 0.3);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent);
 }
 
 .search input {
@@ -377,7 +376,7 @@ html[data-meetings-platform="darwin"] a {
 
 .navigation-item.active {
   background: var(--selection);
-  box-shadow: inset 0 0 0 1px rgb(61 135 245 / 0.3);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent);
 }
 
 .navigation-item > svg {
@@ -619,9 +618,17 @@ html[data-meetings-platform="darwin"] .app-shell.document-palette-open .toolbar 
   transition: background-color 180ms ease;
 }
 
-.meetings-markdown-editor {
+.mdx-editor-persistent,
+.mdx-editor-shell,
+.mdx-editor,
+.mdx-editor-notice {
   --mdx-editor-accent: var(--accent);
   --mdx-editor-accent-soft: var(--accent-soft);
+  --mdx-editor-annotation-bg: color-mix(in srgb, var(--accent) 22%, transparent);
+  --mdx-editor-annotation-active-bg: color-mix(in srgb, var(--accent) 32%, transparent);
+}
+
+.meetings-markdown-editor {
   --mdx-editor-bg: var(--card-bg);
   --mdx-editor-border: var(--card-border);
   --mdx-editor-code-bg: var(--code-bg);
@@ -669,7 +676,7 @@ html[data-meetings-platform="darwin"] .app-shell.document-palette-open .toolbar 
 }
 
 .mdx-editor-notice[data-kind="conflict"] {
-  border-color: rgb(197 110 14 / 0.38);
+  border-color: color-mix(in srgb, var(--accent) 38%, transparent);
 }
 
 .mdx-editor-notice[data-kind="error"] {
@@ -883,7 +890,7 @@ html[data-meetings-platform="darwin"] .app-shell.document-palette-open .toolbar 
 }
 
 .document-palette-input:focus {
-  box-shadow: 0 0 0 2px rgb(61 135 245 / 0.32);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 32%, transparent);
 }
 
 .document-palette-input::placeholder {
@@ -931,7 +938,7 @@ html[data-meetings-platform="darwin"] .app-shell.document-palette-open .toolbar 
 }
 
 .document-palette-item.selected {
-  box-shadow: inset 0 0 0 1px rgb(61 135 245 / 0.3);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent);
 }
 
 .document-palette-item:disabled {

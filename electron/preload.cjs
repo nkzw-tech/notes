@@ -2,17 +2,33 @@
 
 const { contextBridge, ipcRenderer } = require("electron");
 
-const applyPlatformAttribute = () => {
-  document.documentElement?.setAttribute("data-meetings-platform", process.platform);
+let systemAccent = ipcRenderer.sendSync("meetings:system-accent");
+
+const applyAppearance = () => {
+  const root = document.documentElement;
+  if (!root) {
+    return;
+  }
+  root.setAttribute("data-meetings-platform", process.platform);
+  if (typeof systemAccent === "string" && /^#(?:[\da-f]{6}|[\da-f]{8})$/i.test(systemAccent)) {
+    root.style.setProperty("--system-accent", systemAccent);
+  } else {
+    root.style.removeProperty("--system-accent");
+  }
 };
 
 if (document.documentElement) {
-  applyPlatformAttribute();
+  applyAppearance();
 } else {
-  window.addEventListener("DOMContentLoaded", applyPlatformAttribute, {
+  window.addEventListener("DOMContentLoaded", applyAppearance, {
     once: true,
   });
 }
+
+ipcRenderer.on("meetings:system-accent-changed", (_event, color) => {
+  systemAccent = color;
+  applyAppearance();
+});
 
 const meetings = {
   initialWindowLayout: ipcRenderer.sendSync("meetings:window-layout"),

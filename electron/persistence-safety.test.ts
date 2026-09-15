@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { EventEmitter } from "node:events";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
@@ -205,7 +206,12 @@ const loadMainHarness = (
       },
       setApplicationMenu: vi.fn(),
     },
-    nativeTheme: { shouldUseDarkColors: false },
+    nativeTheme: Object.assign(new EventEmitter(), { shouldUseDarkColors: false }),
+    systemPreferences: Object.assign(new EventEmitter(), {
+      getAccentColor: vi.fn(() => "3478f6ff"),
+      subscribeNotification: vi.fn((_name: string, _callback: () => void) => 1),
+      unsubscribeNotification: vi.fn(),
+    }),
     screen: {
       getAllDisplays: () => [],
       getPrimaryDisplay: () => ({
@@ -345,6 +351,8 @@ const loadMainHarness = (
     applicationMenu: () => applicationMenu,
     ipcHandlers,
     ipcListeners,
+    nativeTheme: electron.nativeTheme,
+    systemPreferences: electron.systemPreferences,
     initializeWorkspace,
     listDocuments,
     readDocument,
@@ -1186,5 +1194,45 @@ describe("Electron persistence safety", () => {
     expect(harness.sentChanges).toContainEqual({
       metadata: { peoplePaths: ["people/33-riley-example.md"] },
     });
+  });
+});
+
+describe("system accent colors", () => {
+  test.each(["darwin", "win32", "linux"] as const)("reads the accent and updates every %s window", (platform) => {
+    const harness = loadMainHarness(platform);
+    const { ipcListeners, nativeTheme, systemPreferences, windows } = harness;
+    getFileMenuItems(harness).find((item) => item.label === "New Window")?.click?.({}, windows[0]);
+    const event = { returnValue: null as string | null };
+    ipcListeners.get("meetings:system-accent")!(event);
+    expect(event.returnValue).toBe("#3478f6ff");
+    systemPreferences.getAccentColor.mockReturnValue("a070ccff");
+    if (platform === "darwin") {
+      expect(systemPreferences.subscribeNotification).toHaveBeenCalledWith(
+        "AppleColorPreferencesChangedNotification", expect.any(Function),
+      );
+      systemPreferences.subscribeNotification.mock.calls[0][1]();
+    } else {
+      systemPreferences.emit("accent-color-changed", {}, "a070ccff");
+    }
+    expect(windows).toHaveLength(2);
+    for (const window of windows) {
+      expect(window.webContents.send).toHaveBeenLastCalledWith("meetings:system-accent-changed", "#a070ccff");
+    }
+    systemPreferences.getAccentColor.mockReturnValue("b080ddff");
+    nativeTheme.emit("updated");
+    expect(windows[0].webContents.send).toHaveBeenLastCalledWith("meetings:system-accent-changed", "#b080ddff");
+    harness.appEvents.get("will-quit")!();
+    expect(systemPreferences.unsubscribeNotification).toHaveBeenCalledTimes(platform === "darwin" ? 1 : 0);
+  });
+
+  test("falls back to the CSS system color if a platform cannot provide an accent", () => {
+    const { ipcListeners, systemPreferences } = loadMainHarness("linux");
+    const event = { returnValue: "" as string | null };
+    systemPreferences.getAccentColor.mockImplementation(() => { throw new Error("unavailable"); });
+    ipcListeners.get("meetings:system-accent")!(event);
+    expect(event.returnValue).toBeNull();
+    systemPreferences.getAccentColor.mockReturnValue("invalid");
+    ipcListeners.get("meetings:system-accent")!(event);
+    expect(event.returnValue).toBeNull();
   });
 });

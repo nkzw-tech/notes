@@ -12,6 +12,7 @@ const {
   nativeTheme,
   screen,
   shell,
+  systemPreferences,
 } = require("electron");
 const squirrelStartup = require("electron-squirrel-startup");
 const {
@@ -46,6 +47,25 @@ let workspaceRoot = "";
 let explicitWorkspaceRoot = null;
 let quitSessions = null;
 let pendingWindowState = null;
+let colorPreferencesSubscription = null;
+
+const getSystemAccent = () => {
+  try {
+    const color = systemPreferences.getAccentColor().replace(/^#/, "");
+    return /^(?:[\da-f]{6}|[\da-f]{8})$/i.test(color) ? `#${color}` : null;
+  } catch {
+    return null;
+  }
+};
+
+const updateSystemAccent = () => {
+  const color = getSystemAccent();
+  for (const window of BrowserWindow.getAllWindows()) {
+    if (!window.isDestroyed() && !window.webContents.isDestroyed()) {
+      window.webContents.send("meetings:system-accent-changed", color);
+    }
+  }
+};
 
 const persistOpenWindows = () => {
   if (pendingWindowState) {
@@ -368,6 +388,9 @@ const createWindow = (sourceWindow, restoredSession) => {
   void window.loadURL(target.toString());
 };
 
+ipcMain.on("meetings:system-accent", (event) => {
+  event.returnValue = getSystemAccent();
+});
 ipcMain.on("meetings:window-layout", (event) => {
   event.returnValue = windowSessions.get(event.sender.id)?.layout ?? null;
 });
@@ -482,6 +505,15 @@ if (squirrelStartup || !lock) {
     }
   });
   app.on("ready", () => {
+    nativeTheme.on("updated", updateSystemAccent);
+    if (process.platform === "darwin") {
+      colorPreferencesSubscription = systemPreferences.subscribeNotification(
+        "AppleColorPreferencesChangedNotification",
+        updateSystemAccent,
+      );
+    } else {
+      systemPreferences.on("accent-color-changed", updateSystemAccent);
+    }
     const resolvedWorkspaceRoot = resolveWorkspaceRoot();
     workspaceRoot = resolvedWorkspaceRoot ? initializeWorkspace(resolvedWorkspaceRoot) : "";
     Menu.setApplicationMenu(buildApplicationMenu());
@@ -521,6 +553,9 @@ if (squirrelStartup || !lock) {
     persistOpenWindows();
   });
   app.on("will-quit", () => {
+    if (colorPreferencesSubscription !== null) {
+      systemPreferences.unsubscribeNotification(colorPreferencesSubscription);
+    }
     persistOpenWindows();
     for (const session of workspaceSessions.values()) {
       session.stopWorkspaceWatchers();

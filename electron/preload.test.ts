@@ -49,7 +49,10 @@ test("uses asynchronous saves normally and synchronous saves only for lifecycle 
   vm.runInNewContext(source, {
     console,
     document: {
-      documentElement: { setAttribute: vi.fn() },
+      documentElement: {
+        setAttribute: vi.fn(),
+        style: { setProperty: vi.fn(), removeProperty: vi.fn() },
+      },
     },
     process,
     require: mockedRequire,
@@ -106,4 +109,38 @@ test("uses asynchronous saves normally and synchronous saves only for lifecycle 
 
   exposedMeetings!.readyToClose();
   expect(send).toHaveBeenCalledWith("meetings:close-ready");
+});
+
+test.each([true, false])("applies the OS accent and live changes when the DOM starts ready: %s", (domReady) => {
+  const source = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "preload.cjs"), "utf8");
+  const listeners = new Map<string, (...args: unknown[]) => void>();
+  const setProperty = vi.fn();
+  const removeProperty = vi.fn();
+  const root = { setAttribute: vi.fn(), style: { setProperty, removeProperty } };
+  const document = { documentElement: domReady ? root : null };
+  let onReady: (() => void) | undefined;
+  vm.runInNewContext(source, {
+    document,
+    process,
+    window: { addEventListener: (_event: string, callback: () => void) => { onReady = callback; } },
+    require: () => ({
+      contextBridge: { exposeInMainWorld: vi.fn() },
+      ipcRenderer: {
+        sendSync: (channel: string) => channel === "meetings:system-accent" ? "#3478f6ff" : null,
+        on: (channel: string, callback: (...args: unknown[]) => void) => listeners.set(channel, callback),
+      },
+    }),
+  });
+  if (!domReady) {
+    expect(setProperty).not.toHaveBeenCalled();
+    document.documentElement = root;
+    onReady!();
+  }
+  expect(setProperty).toHaveBeenLastCalledWith("--system-accent", "#3478f6ff");
+  listeners.get("meetings:system-accent-changed")!({}, "#a070ccff");
+  expect(setProperty).toHaveBeenLastCalledWith("--system-accent", "#a070ccff");
+  for (const unavailable of [null, "invalid", {}]) {
+    listeners.get("meetings:system-accent-changed")!({}, unavailable);
+    expect(removeProperty).toHaveBeenLastCalledWith("--system-accent");
+  }
 });
