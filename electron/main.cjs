@@ -1,7 +1,7 @@
 // @ts-check
 
-const { existsSync, watch } = require("node:fs");
-const { basename, dirname, join, resolve } = require("node:path");
+const { randomUUID } = require("node:crypto");
+const { dirname, join, resolve } = require("node:path");
 const { pathToFileURL } = require("node:url");
 const {
   app,
@@ -15,25 +15,14 @@ const {
 } = require("electron");
 const squirrelStartup = require("electron-squirrel-startup");
 const {
-  DOCUMENT_DIRECTORIES,
-  DocumentConflictError,
   createWorkspaceDocument,
   deleteDocument,
   deleteInterview,
   formatDocumentContent,
   isWorkspaceRoot,
-  listDocuments,
   normalizeDocumentPath,
-  readDocument,
   restoreDocument,
-  writeDocument,
-  writeDocumentSync,
 } = require("./document-service.cjs");
-const {
-  readWorkspaceMetadataOrDefault,
-  reconcileWorkspaceMetadataPaths,
-  WORKSPACE_METADATA_PATH,
-} = require("./workspace-metadata.cjs");
 const {
   readWindowState,
   validateWindowStateOnScreen,
@@ -45,291 +34,71 @@ const {
   writeWorkspacePath,
 } = require("./workspace-config.cjs");
 
+const { createWorkspaceSession } = require("./workspace-session.cjs");
+const { readOpenWindows, writeOpenWindows } = require("./open-windows.cjs");
+const { normalizeWindowLayout } = require("./window-layout.cjs");
+
 const appRoot = dirname(__dirname);
-const expectedWriteHashes = new Map();
-const expectedWriteTimers = new Map();
-const pendingChanges = new Map();
-const changeGenerations = new Map();
-const knownDocumentHashes = new Map();
-const activeDocumentWrites = new Map();
-const documentWriteGenerations = new Map();
-const workspaceWatchers = [];
 const closingWindowIds = new Set();
+const windowSessions = new Map();
+const workspaceSessions = new Map();
 let workspaceRoot = "";
-let metadataChangeGeneration = 0;
-let pendingMetadataChange = null;
+let explicitWorkspaceRoot = null;
+let quitSessions = null;
+let pendingWindowState = null;
 
-/** @param {string} path @param {string} hash */
-const rememberWriteHash = (path, hash) => {
-  const previousTimer = expectedWriteTimers.get(path);
-  if (previousTimer) {
-    clearTimeout(previousTimer);
+const persistOpenWindows = () => {
+  if (pendingWindowState) {
+    clearTimeout(pendingWindowState);
+    pendingWindowState = null;
   }
-  expectedWriteHashes.set(path, hash);
-  expectedWriteTimers.set(
-    path,
-    setTimeout(() => {
-      if (expectedWriteHashes.get(path) === hash) {
-        expectedWriteHashes.delete(path);
-      }
-      expectedWriteTimers.delete(path);
-    }, 2_000),
-  );
-};
-
-/** @param {string} path @param {string} hash */
-const consumeExpectedWrite = (path, hash) => {
-  const expectedHash = expectedWriteHashes.get(path);
-  if (expectedHash === undefined) {
-    return false;
-  }
-  expectedWriteHashes.delete(path);
-  const timer = expectedWriteTimers.get(path);
-  if (timer) {
-    clearTimeout(timer);
-    expectedWriteTimers.delete(path);
-  }
-  return expectedHash === hash;
-};
-
-/** @param {{hash: string; path: string}} document */
-const rememberWrite = (document) => {
-  rememberWriteHash(document.path, document.hash);
-  knownDocumentHashes.set(document.path, document.hash);
-};
-
-/** @param {string} path */
-const beginDocumentWrite = (path) => {
-  activeDocumentWrites.set(path, (activeDocumentWrites.get(path) ?? 0) + 1);
-  documentWriteGenerations.set(path, (documentWriteGenerations.get(path) ?? 0) + 1);
-};
-
-/** @param {string} path */
-const endDocumentWrite = (path) => {
-  const remainingWrites = (activeDocumentWrites.get(path) ?? 1) - 1;
-  if (remainingWrites > 0) {
-    activeDocumentWrites.set(path, remainingWrites);
-  } else {
-    activeDocumentWrites.delete(path);
-  }
-};
-
-/** @param {unknown} error */
-const errorMessage = (error) => (error instanceof Error ? error.message : String(error));
-
-/** @param {string} path */
-const publishDocumentChange = async (path, generation) => {
-  if (activeDocumentWrites.has(path)) {
-    scheduleDocumentChange(path);
-    return;
-  }
-  const writeGeneration = documentWriteGenerations.get(path) ?? 0;
   try {
-    const document = await readDocument(workspaceRoot, path);
-    if (changeGenerations.get(path) !== generation) {
-      return;
-    }
-    if (
-      activeDocumentWrites.has(path) ||
-      (documentWriteGenerations.get(path) ?? 0) !== writeGeneration
-    ) {
-      scheduleDocumentChange(path);
-      return;
-    }
-    if (knownDocumentHashes.get(path) === document.hash) {
-      consumeExpectedWrite(path, document.hash);
-      return;
-    }
-    if (consumeExpectedWrite(path, document.hash)) {
-      knownDocumentHashes.set(path, document.hash);
-      return;
-    }
-    knownDocumentHashes.set(path, document.hash);
-    for (const window of BrowserWindow.getAllWindows()) {
-      if (!window.isDestroyed() && !window.webContents.isDestroyed()) {
-        window.webContents.send("meetings:document-change", {
-          deleted: false,
-          document,
-          path,
-        });
-      }
-    }
+    writeOpenWindows([...(quitSessions ?? windowSessions).values()], app.getPath("userData"));
   } catch (error) {
-    if (changeGenerations.get(path) !== generation) {
-      return;
-    }
-    if (
-      activeDocumentWrites.has(path) ||
-      (documentWriteGenerations.get(path) ?? 0) !== writeGeneration
-    ) {
-      scheduleDocumentChange(path);
-      return;
-    }
-    if (/** @type {NodeJS.ErrnoException} */ (error).code !== "ENOENT") {
-      console.error(`Failed to publish Markdown change for ${path}: ${errorMessage(error)}`);
-      return;
-    }
-    knownDocumentHashes.delete(path);
-    for (const window of BrowserWindow.getAllWindows()) {
-      if (!window.isDestroyed() && !window.webContents.isDestroyed()) {
-        window.webContents.send("meetings:document-change", {
-          deleted: true,
-          path,
-        });
-      }
-    }
+    console.error("Failed to remember Notes windows:", error);
   }
 };
 
-const reconcileWorkspaceDocuments = async () => {
-  try {
-    const documents = await listDocuments(workspaceRoot);
-    const currentPaths = new Set(documents.map(({ path }) => path));
-    for (const document of documents) {
-      if (knownDocumentHashes.get(document.path) === document.hash) {
-        continue;
-      }
-      const generation = (changeGenerations.get(document.path) ?? 0) + 1;
-      changeGenerations.set(document.path, generation);
-      await publishDocumentChange(document.path, generation);
-    }
-    for (const path of knownDocumentHashes.keys()) {
-      if (!currentPaths.has(path)) {
-        const generation = (changeGenerations.get(path) ?? 0) + 1;
-        changeGenerations.set(path, generation);
-        await publishDocumentChange(path, generation);
-      }
-    }
-  } catch (error) {
-    console.error(`Failed to reconcile Markdown files: ${errorMessage(error)}`);
+const scheduleWindowState = () => {
+  if (!pendingWindowState) {
+    pendingWindowState = setTimeout(persistOpenWindows, 100);
   }
 };
 
-/** @param {string} path */
-const scheduleDocumentChange = (path) => {
-  const normalizedPath = normalizeDocumentPath(path);
-  if (!normalizedPath) {
-    return;
-  }
-  const generation = (changeGenerations.get(normalizedPath) ?? 0) + 1;
-  changeGenerations.set(normalizedPath, generation);
-  const existing = pendingChanges.get(normalizedPath);
-  if (existing) {
-    clearTimeout(existing);
-  }
-  pendingChanges.set(
-    normalizedPath,
-    setTimeout(() => {
-      pendingChanges.delete(normalizedPath);
-      void publishDocumentChange(normalizedPath, generation);
-    }, 40),
-  );
+const cancelQuit = () => {
+  quitSessions = null;
+  persistOpenWindows();
 };
 
-const publishWorkspaceMetadataChange = async (generation) => {
-  let change;
-  try {
-    const [documents, metadata] = await Promise.all([
-      listDocuments(workspaceRoot),
-      readWorkspaceMetadataOrDefault(workspaceRoot),
-    ]);
-    const reconciled = reconcileWorkspaceMetadataPaths(
-      metadata,
-      new Set(documents.map(({ path }) => path)),
+const captureWindowBounds = (window) => ({
+  ...window.getNormalBounds(),
+  isFullScreen: window.isFullScreen(),
+  isMaximized: window.isMaximized(),
+});
+
+const getWorkspaceSession = (root) => {
+  if (!workspaceSessions.has(root)) {
+    workspaceSessions.set(
+      root,
+      createWorkspaceSession(root, () =>
+        BrowserWindow.getAllWindows().filter(
+          (window) =>
+            !window.isDestroyed() &&
+            windowSessions.get(window.webContents.id)?.workspaceRoot === root,
+        ),
+      ),
     );
-    change = {
-      ...(reconciled.metadataError ? { error: reconciled.metadataError } : {}),
-      metadata: { peoplePaths: reconciled.peoplePaths },
-    };
-  } catch (error) {
-    change = {
-      error: `Failed to load ${WORKSPACE_METADATA_PATH}: ${errorMessage(error)}`,
-    };
   }
-  if (metadataChangeGeneration !== generation) {
-    return;
-  }
-  for (const window of BrowserWindow.getAllWindows()) {
-    if (!window.isDestroyed() && !window.webContents.isDestroyed()) {
-      window.webContents.send("meetings:workspace-metadata-change", change);
-    }
-  }
+  return workspaceSessions.get(root);
 };
 
-const scheduleWorkspaceMetadataChange = () => {
-  metadataChangeGeneration += 1;
-  const generation = metadataChangeGeneration;
-  if (pendingMetadataChange) {
-    clearTimeout(pendingMetadataChange);
+const sessionForSender = (sender) => {
+  const session = windowSessions.get(sender.id);
+  if (!session) {
+    throw new Error("This Notes window is no longer available.");
   }
-  pendingMetadataChange = setTimeout(() => {
-    pendingMetadataChange = null;
-    void publishWorkspaceMetadataChange(generation);
-  }, 40);
+  return getWorkspaceSession(session.workspaceRoot);
 };
-
-const startWorkspaceWatchers = () => {
-  if (!workspaceRoot) {
-    return;
-  }
-  for (const directory of DOCUMENT_DIRECTORIES) {
-    const directoryPath = resolve(workspaceRoot, directory);
-    if (!existsSync(directoryPath)) {
-      continue;
-    }
-    const watcher = watch(directoryPath, { persistent: false }, (_eventType, filename) => {
-      if (filename) {
-        scheduleDocumentChange(`${directory}/${String(filename)}`);
-      } else {
-        void reconcileWorkspaceDocuments();
-      }
-    });
-    watcher.on("error", (error) => {
-      console.error(`Failed to watch ${directoryPath}: ${errorMessage(error)}`);
-      void reconcileWorkspaceDocuments();
-    });
-    workspaceWatchers.push(watcher);
-  }
-
-  const metadataDirectory = resolve(workspaceRoot, dirname(WORKSPACE_METADATA_PATH));
-  if (existsSync(metadataDirectory)) {
-    const watcher = watch(metadataDirectory, { persistent: false }, (_eventType, filename) => {
-      if (filename === null || String(filename) === basename(WORKSPACE_METADATA_PATH)) {
-        scheduleWorkspaceMetadataChange();
-      }
-    });
-    watcher.on("error", (error) => {
-      console.error(`Failed to watch ${metadataDirectory}: ${errorMessage(error)}`);
-      void publishWorkspaceMetadataChange(++metadataChangeGeneration);
-    });
-    workspaceWatchers.push(watcher);
-  }
-};
-
-const stopWorkspaceWatchers = () => {
-  for (const watcher of workspaceWatchers.splice(0)) {
-    watcher.close();
-  }
-  for (const timer of pendingChanges.values()) {
-    clearTimeout(timer);
-  }
-  pendingChanges.clear();
-  changeGenerations.clear();
-  expectedWriteHashes.clear();
-  for (const timer of expectedWriteTimers.values()) {
-    clearTimeout(timer);
-  }
-  expectedWriteTimers.clear();
-  knownDocumentHashes.clear();
-  activeDocumentWrites.clear();
-  documentWriteGenerations.clear();
-  if (pendingMetadataChange) {
-    clearTimeout(pendingMetadataChange);
-    pendingMetadataChange = null;
-  }
-  metadataChangeGeneration += 1;
-};
-
 const resolveWorkspaceRoot = () => {
   const workspaceArgumentIndex = process.argv.indexOf("--workspace");
   const workspaceArgument =
@@ -348,6 +117,7 @@ const resolveWorkspaceRoot = () => {
     if (candidate) {
       const absolutePath = resolve(candidate);
       if (isWorkspaceRoot(absolutePath)) {
+        explicitWorkspaceRoot = absolutePath;
         return absolutePath;
       }
     }
@@ -359,36 +129,6 @@ const resolveWorkspaceRoot = () => {
   }
 
   return null;
-};
-
-const requireWorkspaceRoot = () => {
-  if (!workspaceRoot) {
-    throw new Error("Choose a Notes workspace first.");
-  }
-  return workspaceRoot;
-};
-
-const loadWorkspaceSnapshot = async () => {
-  if (!workspaceRoot) {
-    return {
-      documents: [],
-      metadataError: null,
-      peoplePaths: [],
-      workspacePath: null,
-    };
-  }
-  const [documents, metadata] = await Promise.all([
-    listDocuments(workspaceRoot),
-    readWorkspaceMetadataOrDefault(workspaceRoot),
-  ]);
-  for (const document of documents) {
-    knownDocumentHashes.set(document.path, document.hash);
-  }
-  return {
-    documents,
-    ...reconcileWorkspaceMetadataPaths(metadata, new Set(documents.map(({ path }) => path))),
-    workspacePath: workspaceRoot,
-  };
 };
 
 const chooseWorkspace = async (browserWindow) => {
@@ -404,63 +144,19 @@ const chooseWorkspace = async (browserWindow) => {
   if (selection.canceled || !selection.filePaths[0]) {
     return { canceled: true };
   }
+  if (!browserWindow || browserWindow.isDestroyed()) {
+    return { canceled: true };
+  }
 
   const selectedWorkspace = initializeWorkspace(selection.filePaths[0]);
   writeWorkspacePath(selectedWorkspace);
-  stopWorkspaceWatchers();
+  const session = windowSessions.get(browserWindow.webContents.id);
+  session.workspaceRoot = selectedWorkspace;
+  delete session.activePath;
   workspaceRoot = selectedWorkspace;
-  startWorkspaceWatchers();
+  getWorkspaceSession(selectedWorkspace);
+  persistOpenWindows();
   return { canceled: false, workspacePath: selectedWorkspace };
-};
-
-/** @param {{baseHash: string; content: string; path: string}} request */
-const saveDocumentSync = (request) => {
-  const trackedPath = typeof request.path === "string" ? normalizeDocumentPath(request.path) : null;
-  if (trackedPath) {
-    beginDocumentWrite(trackedPath);
-  }
-  try {
-    const document = writeDocumentSync({
-      ...request,
-      root: requireWorkspaceRoot(),
-    });
-    rememberWrite(document);
-    return { document, status: "saved" };
-  } catch (error) {
-    if (error instanceof DocumentConflictError) {
-      return { document: error.document, status: "conflict" };
-    }
-    return { error: errorMessage(error), status: "error" };
-  } finally {
-    if (trackedPath) {
-      endDocumentWrite(trackedPath);
-    }
-  }
-};
-
-/** @param {{baseHash: string; content: string; path: string}} request */
-const saveDocument = async (request) => {
-  const trackedPath = typeof request.path === "string" ? normalizeDocumentPath(request.path) : null;
-  if (trackedPath) {
-    beginDocumentWrite(trackedPath);
-  }
-  try {
-    const document = await writeDocument({
-      ...request,
-      root: requireWorkspaceRoot(),
-    });
-    rememberWrite(document);
-    return { document, status: "saved" };
-  } catch (error) {
-    if (error instanceof DocumentConflictError) {
-      return { document: error.document, status: "conflict" };
-    }
-    return { error: errorMessage(error), status: "error" };
-  } finally {
-    if (trackedPath) {
-      endDocumentWrite(trackedPath);
-    }
-  }
 };
 
 const sendToWebContents = (webContents, channel, value) => {
@@ -473,6 +169,7 @@ const reportClosingSaveFailure = (webContents, result) => {
   if (!closingWindowIds.has(webContents.id) || result.status === "saved") {
     return;
   }
+  cancelQuit();
   sendToWebContents(
     webContents,
     "meetings:close-blocked",
@@ -505,6 +202,11 @@ const buildApplicationMenu = () =>
     {
       label: "File",
       submenu: [
+        {
+          accelerator: "CommandOrControl+N",
+          click: (_menuItem, browserWindow) => createWindow(browserWindow),
+          label: "New Window",
+        },
         {
           accelerator: "CommandOrControl+O",
           click: (_menuItem, browserWindow) => {
@@ -543,10 +245,26 @@ const buildApplicationMenu = () =>
     { role: "windowMenu" },
   ]);
 
-const createWindow = () => {
+const createWindow = (sourceWindow, restoredSession) => {
+  const sourceSession = sourceWindow && windowSessions.get(sourceWindow.webContents.id);
   const savedState = readWindowState(app.getPath("userData"));
-  const validatedState = savedState
-    ? validateWindowStateOnScreen(savedState, screen.getAllDisplays())
+  const inheritedLayout = sourceSession?.layout ?? savedState?.layout;
+  const session = restoredSession
+    ? { ...restoredSession }
+    : {
+        recoveryId: randomUUID(),
+        workspaceRoot: sourceSession?.workspaceRoot ?? workspaceRoot,
+      };
+  session.layout = normalizeWindowLayout(session.layout ?? inheritedLayout);
+  if (quitSessions) {
+    cancelQuit();
+  }
+  const sourceBounds = sourceWindow?.getNormalBounds();
+  const preferredState = sourceBounds
+    ? { ...sourceBounds, x: sourceBounds.x + 24, y: sourceBounds.y + 24 }
+    : (session.bounds ?? savedState);
+  const validatedState = preferredState
+    ? validateWindowStateOnScreen(preferredState, screen.getAllDisplays())
     : null;
   const { height, width } = screen.getPrimaryDisplay().workAreaSize;
   const useMacVibrancy = process.platform === "darwin";
@@ -588,26 +306,44 @@ const createWindow = () => {
   }
 
   const windowWebContentsId = window.webContents.id;
+  session.bounds = captureWindowBounds(window);
+  windowSessions.set(windowWebContentsId, session);
+  getWorkspaceSession(session.workspaceRoot);
+  persistOpenWindows();
   window.once("ready-to-show", () => window.show());
+  const rememberBounds = () => {
+    if (!quitSessions) {
+      session.bounds = captureWindowBounds(window);
+      scheduleWindowState();
+    }
+  };
+  for (const event of [
+    "move",
+    "resize",
+    "maximize",
+    "unmaximize",
+    "enter-full-screen",
+    "leave-full-screen",
+  ]) {
+    window.on(event, rememberBounds);
+  }
   window.on("close", () => {
     closingWindowIds.add(windowWebContentsId);
-    try {
-      const bounds = window.getNormalBounds();
-      writeWindowState(
-        {
-          height: bounds.height,
-          isFullScreen: window.isFullScreen(),
-          isMaximized: window.isMaximized(),
-          width: bounds.width,
-          x: bounds.x,
-          y: bounds.y,
-        },
-        app.getPath("userData"),
-      );
-    } catch {}
+    if (!quitSessions) {
+      session.bounds = captureWindowBounds(window);
+    }
+    persistOpenWindows();
   });
   window.on("closed", () => {
     closingWindowIds.delete(windowWebContentsId);
+    // Only a completed close changes the default. A canceled close must not win.
+    try {
+      writeWindowState({ ...session.bounds, layout: session.layout }, app.getPath("userData"));
+    } catch (error) {
+      console.error("Failed to remember the last Notes window:", error);
+    }
+    windowSessions.delete(windowWebContentsId);
+    persistOpenWindows();
   });
 
   window.webContents.setWindowOpenHandler(({ url }) => {
@@ -622,36 +358,72 @@ const createWindow = () => {
     }
   });
   const rendererURL = process.env.ELECTRON_RENDERER_URL;
-  if (rendererURL) {
-    void window.loadURL(rendererURL);
-  } else {
-    void window.loadURL(pathToFileURL(join(appRoot, "dist/index.html")).toString());
+  const target = new URL(rendererURL ?? pathToFileURL(join(appRoot, "dist/index.html")).toString());
+  const sourceURL = sourceWindow?.webContents.getURL();
+  if (sourceURL) {
+    target.hash = new URL(sourceURL).hash;
+  } else if (session.activePath) {
+    target.hash = `#/${encodeURI(session.activePath)}`;
   }
+  void window.loadURL(target.toString());
 };
 
-ipcMain.handle("meetings:load-workspace", loadWorkspaceSnapshot);
+ipcMain.on("meetings:window-layout", (event) => {
+  event.returnValue = windowSessions.get(event.sender.id)?.layout ?? null;
+});
+ipcMain.on("meetings:window-state", (event, state) => {
+  const session = windowSessions.get(event.sender.id);
+  const layout = normalizeWindowLayout(state?.layout);
+  if (!session || !layout) {
+    return;
+  }
+  session.layout = layout;
+  if (typeof state.activePath === "string") {
+    const path = normalizeDocumentPath(state.activePath);
+    if (path) {
+      session.activePath = path;
+    }
+  }
+  scheduleWindowState();
+});
+ipcMain.on("meetings:cancel-close", (event) => {
+  closingWindowIds.delete(event.sender.id);
+  cancelQuit();
+});
+ipcMain.on("meetings:recovery-key", (event) => {
+  const session = windowSessions.get(event.sender.id);
+  event.returnValue =
+    session?.recoveryId === "primary"
+      ? "notes.current-draft.v1"
+      : `notes.current-draft.v1.${session.recoveryId}.${encodeURIComponent(session.workspaceRoot)}`;
+});
+ipcMain.handle("meetings:load-workspace", (event) =>
+  sessionForSender(event.sender).loadWorkspaceSnapshot(),
+);
 ipcMain.handle("meetings:choose-workspace", (event) => {
   const browserWindow = BrowserWindow.getAllWindows().find(
     (window) => window.webContents === event.sender,
   );
   return chooseWorkspace(browserWindow);
 });
-ipcMain.handle("meetings:create-document", async (_event, request) => {
+ipcMain.handle("meetings:create-document", async (event, request) => {
+  const session = sessionForSender(event.sender);
   const document = await createWorkspaceDocument({
     ...request,
-    root: requireWorkspaceRoot(),
+    root: session.requireWorkspaceRoot(),
   });
-  rememberWrite(document);
+  session.rememberWrite(document);
+  session.publishSavedDocument(document, event.sender);
   return document;
 });
-ipcMain.handle("meetings:delete-document", (_event, request) =>
-  deleteDocument({ ...request, root: requireWorkspaceRoot() }),
+ipcMain.handle("meetings:delete-document", (event, request) =>
+  deleteDocument({ ...request, root: sessionForSender(event.sender).requireWorkspaceRoot() }),
 );
-ipcMain.handle("meetings:complete-interview", (_event, request) =>
-  deleteInterview({ ...request, root: requireWorkspaceRoot() }),
+ipcMain.handle("meetings:complete-interview", (event, request) =>
+  deleteInterview({ ...request, root: sessionForSender(event.sender).requireWorkspaceRoot() }),
 );
 ipcMain.handle("meetings:save-document", async (event, request) => {
-  const result = await saveDocument(request);
+  const result = await sessionForSender(event.sender).saveDocument(request, event.sender);
   reportClosingSaveFailure(event.sender, result);
   return result;
 });
@@ -662,9 +434,10 @@ ipcMain.on("meetings:close-ready", (event) => {
 });
 ipcMain.on("meetings:save-document-sync", (event, request) => {
   const { keepalive, ...saveRequest } = request;
-  const result = saveDocumentSync(saveRequest);
+  const result = sessionForSender(event.sender).saveDocumentSync(saveRequest, event.sender);
   if (keepalive && closingWindowIds.has(event.sender.id)) {
     if (result.status !== "saved") {
+      cancelQuit();
       sendToWebContents(
         event.sender,
         "meetings:close-blocked",
@@ -676,15 +449,20 @@ ipcMain.on("meetings:save-document-sync", (event, request) => {
   }
   event.returnValue = result;
 });
-ipcMain.handle("meetings:format-document", (_event, request) =>
-  formatDocumentContent({ ...request, root: requireWorkspaceRoot() }),
+ipcMain.handle("meetings:format-document", (event, request) =>
+  formatDocumentContent({
+    ...request,
+    root: sessionForSender(event.sender).requireWorkspaceRoot(),
+  }),
 );
-ipcMain.handle("meetings:restore-document", async (_event, request) => {
+ipcMain.handle("meetings:restore-document", async (event, request) => {
+  const session = sessionForSender(event.sender);
   const document = await restoreDocument({
     ...request,
-    root: requireWorkspaceRoot(),
+    root: session.requireWorkspaceRoot(),
   });
-  rememberWrite(document);
+  session.rememberWrite(document);
+  session.publishSavedDocument(document, event.sender);
   return document;
 });
 
@@ -705,21 +483,51 @@ if (squirrelStartup || !lock) {
   });
   app.on("ready", () => {
     const resolvedWorkspaceRoot = resolveWorkspaceRoot();
-    workspaceRoot = resolvedWorkspaceRoot
-      ? initializeWorkspace(resolvedWorkspaceRoot)
-      : "";
+    workspaceRoot = resolvedWorkspaceRoot ? initializeWorkspace(resolvedWorkspaceRoot) : "";
     Menu.setApplicationMenu(buildApplicationMenu());
-    startWorkspaceWatchers();
-    createWindow();
+    const openWindows = readOpenWindows(app.getPath("userData"));
+    if (openWindows.length) {
+      for (const session of openWindows) {
+        createWindow(undefined, session);
+      }
+      if (
+        explicitWorkspaceRoot &&
+        !openWindows.some((session) => session.workspaceRoot === explicitWorkspaceRoot)
+      ) {
+        createWindow();
+      }
+    } else {
+      createWindow(undefined, { recoveryId: "primary", workspaceRoot });
+    }
   });
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
     }
   });
-  app.on("before-quit", stopWorkspaceWatchers);
+  app.on("before-quit", () => {
+    if (!quitSessions) {
+      for (const window of BrowserWindow.getAllWindows()) {
+        if (!window.isDestroyed()) {
+          const session = windowSessions.get(window.webContents.id);
+          if (session) {
+            session.bounds = captureWindowBounds(window);
+          }
+        }
+      }
+      // Keep references so late layout updates and lifecycle flushes remain current.
+      quitSessions = new Map(windowSessions);
+    }
+    persistOpenWindows();
+  });
+  app.on("will-quit", () => {
+    persistOpenWindows();
+    for (const session of workspaceSessions.values()) {
+      session.stopWorkspaceWatchers();
+    }
+  });
   app.on("window-all-closed", () => {
-    if (process.platform !== "darwin") {
+    if (quitSessions || process.platform !== "darwin") {
       app.quit();
     }
   });

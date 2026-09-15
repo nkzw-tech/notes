@@ -15,6 +15,10 @@ if (document.documentElement) {
 }
 
 const meetings = {
+  initialWindowLayout: ipcRenderer.sendSync("meetings:window-layout"),
+  updateWindowState: (state) => ipcRenderer.send("meetings:window-state", state),
+  cancelClose: () => ipcRenderer.send("meetings:cancel-close"),
+  recoveryDraftKey: ipcRenderer.sendSync("meetings:recovery-key"),
   chooseWorkspace: () => ipcRenderer.invoke("meetings:choose-workspace"),
   completeInterview: (request) => ipcRenderer.invoke("meetings:complete-interview", request),
   createDocument: (request) => ipcRenderer.invoke("meetings:create-document", request),

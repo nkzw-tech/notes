@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { afterEach, describe, expect, test, vi } from "vitest";
+import type { WindowLayout } from "../src/windowLayout.ts";
 
 type StoredDocument = {
   content: string;
@@ -26,9 +27,31 @@ const createDeferred = <Value>(): Deferred<Value> => {
   return { promise, resolve };
 };
 
+type SavedWindowState = {
+  height: number;
+  width: number;
+  x: number;
+  y: number;
+  isFullScreen?: boolean;
+  isMaximized?: boolean;
+  layout?: WindowLayout;
+};
+type WindowSession = {
+  recoveryId: string;
+  workspaceRoot: string;
+  layout?: WindowLayout;
+  bounds?: SavedWindowState;
+  activePath?: string;
+};
+
 type MainHarness = ReturnType<typeof loadMainHarness>;
 
-const loadMainHarness = (platform = process.platform, workspaceAvailable = true) => {
+const loadMainHarness = (
+  platform = process.platform,
+  workspaceAvailable = true,
+  restoredWindows: WindowSession[] = [],
+  savedDefault: SavedWindowState | null = null,
+) => {
   const electronDirectory = dirname(fileURLToPath(import.meta.url));
   const mainPath = join(electronDirectory, "main.cjs");
   const source = readFileSync(mainPath, "utf8");
@@ -60,7 +83,13 @@ const loadMainHarness = (platform = process.platform, workspaceAvailable = true)
     metadataError: null,
     peoplePaths: [],
   });
+  const createWorkspaceDocument = vi.fn();
   const deleteDocument = vi.fn();
+  const writeOpenWindows = vi.fn(
+    (sessions: WindowSession[], _root: string) =>
+      JSON.parse(JSON.stringify(sessions)) as WindowSession[],
+  );
+  const watcherClose = vi.fn();
   const restoreDocument = vi.fn();
   const initializeWorkspace = vi.fn((path: string) => path);
   const readWorkspacePath = vi.fn(() => (workspaceAvailable ? "/tmp/notes-workspace" : null));
@@ -72,24 +101,27 @@ const loadMainHarness = (platform = process.platform, workspaceAvailable = true)
 
   class FakeBrowserWindow {
     static instances: FakeBrowserWindow[] = [];
+    static nextId = 1;
 
     handlers = new Map<string, (...arguments_: unknown[]) => void>();
-    options: { minWidth?: number };
+    options: { minWidth?: number; height?: number; width?: number; x?: number; y?: number };
+    bounds = { height: 800, width: 1200, x: 0, y: 0 };
     webContentsUnavailable = false;
 
     fakeWebContents = {
       handlers: new Map<string, (...arguments_: unknown[]) => void>(),
-      id: FakeBrowserWindow.instances.length + 1,
+      id: FakeBrowserWindow.nextId++,
       isDestroyed: () => false,
       on: (event: string, callback: (...arguments_: unknown[]) => void) => {
         this.fakeWebContents.handlers.set(event, callback);
       },
-      send: (channel: string, change: unknown) => {
+      send: vi.fn((channel: string, change: unknown) => {
         sentChannels.push(channel);
         sentChanges.push(change);
-      },
+      }),
       setWindowOpenHandler: vi.fn(),
       toggleDevTools: vi.fn(),
+      getURL: () => "file:///notes/index.html#/docs/todo.md",
     };
 
     get webContents() {
@@ -99,8 +131,14 @@ const loadMainHarness = (platform = process.platform, workspaceAvailable = true)
       return this.fakeWebContents;
     }
 
-    constructor(options: { minWidth?: number }) {
+    constructor(options: FakeBrowserWindow["options"]) {
       this.options = options;
+      this.bounds = {
+        height: options.height ?? 800,
+        width: options.width ?? 1200,
+        x: options.x ?? 0,
+        y: options.y ?? 0,
+      };
       FakeBrowserWindow.instances.push(this);
     }
 
@@ -114,7 +152,7 @@ const loadMainHarness = (platform = process.platform, workspaceAvailable = true)
     }
     focus() {}
     getNormalBounds() {
-      return { height: 800, width: 1200, x: 0, y: 0 };
+      return this.bounds;
     }
     isDestroyed() {
       return false;
@@ -128,9 +166,7 @@ const loadMainHarness = (platform = process.platform, workspaceAvailable = true)
     isMinimized() {
       return false;
     }
-    loadURL(_url: string) {
-      return Promise.resolve();
-    }
+    loadURL = vi.fn((_url: string) => Promise.resolve());
     maximize() {}
     on(event: string, callback: (...arguments_: unknown[]) => void) {
       this.handlers.set(event, callback);
@@ -188,6 +224,7 @@ const loadMainHarness = (platform = process.platform, workspaceAvailable = true)
         this.document = document;
       }
     },
+    createWorkspaceDocument,
     deleteDocument,
     formatDocumentContent: vi.fn(),
     hashContent: (content: string) => createHash("sha256").update(content).digest("hex"),
@@ -201,12 +238,28 @@ const loadMainHarness = (platform = process.platform, workspaceAvailable = true)
     writeDocumentSync,
   };
   const windowState = {
-    readWindowState: () => null,
-    validateWindowStateOnScreen: () => null,
-    writeWindowState: vi.fn(),
+    readWindowState: () => savedDefault,
+    validateWindowStateOnScreen: (state: SavedWindowState) => state,
+    writeWindowState: vi.fn((state: SavedWindowState) => {
+      savedDefault = state;
+    }),
   };
 
   const mockedRequire = (specifier: string) => {
+    if (specifier === "./workspace-session.cjs") {
+      const nestedModule = { exports: {} };
+      vm.runInNewContext(readFileSync(join(electronDirectory, "workspace-session.cjs"), "utf8"), {
+        require: mockedRequire,
+        module: nestedModule,
+        setTimeout,
+        clearTimeout,
+        console,
+      });
+      return nestedModule.exports;
+    }
+    if (specifier === "./open-windows.cjs") {
+      return { readOpenWindows: () => restoredWindows, writeOpenWindows };
+    }
     if (specifier === "electron") {
       return electron;
     }
@@ -222,7 +275,7 @@ const loadMainHarness = (platform = process.platform, workspaceAvailable = true)
           callback: (eventType: string, filename: string | Buffer | null) => void,
         ) => {
           watcherCallbacks.push(callback);
-          return { close: vi.fn(), on: vi.fn() };
+          return { close: watcherClose, on: vi.fn() };
         },
       };
     }
@@ -284,6 +337,11 @@ const loadMainHarness = (platform = process.platform, workspaceAvailable = true)
   return {
     app,
     appEvents,
+    createWorkspaceDocument,
+    restoreDocument,
+    writeOpenWindows,
+    writeWindowState: windowState.writeWindowState,
+    watcherClose,
     applicationMenu: () => applicationMenu,
     ipcHandlers,
     ipcListeners,
@@ -338,6 +396,306 @@ afterEach(() => {
 });
 
 describe("Electron persistence safety", () => {
+  const hiddenLayout: WindowLayout = {
+    sidebarCollapsed: true,
+    sidebarWidth: 280,
+    sectionExpanded: { Reports: true, People: false },
+  };
+  const visibleLayout: WindowLayout = {
+    sidebarCollapsed: false,
+    sidebarWidth: 450,
+    sectionExpanded: { Reports: false, People: true },
+  };
+  const newWindow = (harness: MainHarness, source = harness.windows[0]) => {
+    getFileMenuItems(harness)
+      .find((item) => item.label === "New Window")
+      ?.click?.({}, source);
+    return harness.windows.at(-1)!;
+  };
+  const updateView = (
+    harness: MainHarness,
+    window: MainHarness["windows"][number],
+    layout: WindowLayout,
+    activePath = "docs/todo.md",
+  ) => {
+    harness.ipcListeners.get("meetings:window-state")?.(
+      { sender: window.webContents },
+      { layout, activePath },
+    );
+  };
+  const readLayout = (harness: MainHarness, window: MainHarness["windows"][number]) => {
+    const event = { sender: window.webContents, returnValue: undefined };
+    harness.ipcListeners.get("meetings:window-layout")?.(event);
+    return event.returnValue;
+  };
+  const closeWindow = (harness: MainHarness, window: MainHarness["windows"][number]) => {
+    window.handlers.get("close")?.();
+    window.handlers.get("closed")?.();
+    harness.windows.splice(harness.windows.indexOf(window), 1);
+  };
+  const savedSessions = (harness: MainHarness) =>
+    harness.writeOpenWindows.mock.results.at(-1)!.value as WindowSession[];
+
+  test("new windows copy the focused layout immediately and then remember changes independently", () => {
+    const harness = loadMainHarness("darwin");
+    const first = harness.windows[0]!;
+    updateView(harness, first, hiddenLayout);
+    const second = newWindow(harness);
+    expect(readLayout(harness, second)).toEqual(hiddenLayout);
+    updateView(harness, second, visibleLayout);
+    expect(readLayout(harness, first)).toEqual(hiddenLayout);
+    expect(readLayout(harness, second)).toEqual(visibleLayout);
+    expect(readLayout(harness, newWindow(harness, first))).toEqual(hiddenLayout);
+  });
+
+  test("quitting restores all open windows with their own notes, layouts, and positions", () => {
+    const harness = loadMainHarness("darwin");
+    const first = harness.windows[0]!;
+    const second = newWindow(harness);
+    updateView(harness, first, hiddenLayout, "docs/first.md");
+    updateView(harness, second, visibleLayout, "docs/second.md");
+    first.bounds = { height: 850, width: 680, x: 20, y: 50 };
+    second.bounds = { height: 900, width: 710, x: 740, y: 60 };
+    harness.appEvents.get("before-quit")?.();
+    closeWindow(harness, first);
+    closeWindow(harness, second);
+    harness.appEvents.get("window-all-closed")?.();
+    expect(harness.app.quit).toHaveBeenCalled();
+    // The final quit after delayed save flushes must not replace the session with an empty list.
+    harness.appEvents.get("before-quit")?.();
+    harness.appEvents.get("will-quit")?.();
+    const restarted = loadMainHarness("darwin", true, savedSessions(harness));
+    expect(restarted.windows).toHaveLength(2);
+    expect(readLayout(restarted, restarted.windows[0]!)).toEqual(hiddenLayout);
+    expect(readLayout(restarted, restarted.windows[1]!)).toEqual(visibleLayout);
+    expect(restarted.windows[0]!.options).toMatchObject(first.bounds);
+    expect(restarted.windows[1]!.options).toMatchObject(second.bounds);
+    expect(restarted.windows[0]!.loadURL).toHaveBeenCalledWith(
+      expect.stringContaining("#/docs/first.md"),
+    );
+    expect(restarted.windows[1]!.loadURL).toHaveBeenCalledWith(
+      expect.stringContaining("#/docs/second.md"),
+    );
+  });
+
+  test("closing every window uses the last closed layout even when another window changed settings last", () => {
+    const harness = loadMainHarness("darwin");
+    const first = harness.windows[0]!;
+    const second = newWindow(harness);
+    updateView(harness, first, hiddenLayout);
+    updateView(harness, second, visibleLayout);
+    closeWindow(harness, second);
+    closeWindow(harness, first);
+    expect(savedSessions(harness)).toEqual([]);
+    const savedDefault = harness.writeWindowState.mock.calls.at(-1)![0];
+    expect(savedDefault.layout).toEqual(hiddenLayout);
+    const restarted = loadMainHarness("darwin", true, [], savedDefault);
+    expect(readLayout(restarted, restarted.windows[0]!)).toEqual(hiddenLayout);
+    harness.appEvents.get("activate")?.();
+    expect(readLayout(harness, harness.windows[0]!)).toEqual(hiddenLayout);
+  });
+
+  test("a manually closed window stays excluded when the remaining window quits", () => {
+    const harness = loadMainHarness("darwin");
+    const first = harness.windows[0]!;
+    const second = newWindow(harness);
+    updateView(harness, second, visibleLayout);
+    closeWindow(harness, first);
+    harness.appEvents.get("before-quit")?.();
+    closeWindow(harness, second);
+    expect(savedSessions(harness)).toHaveLength(1);
+    expect(savedSessions(harness)[0]!.layout).toEqual(visibleLayout);
+  });
+
+  test("an unresolved save cancels quitting and a subsequent manual close stays closed", () => {
+    const harness = loadMainHarness("darwin");
+    const first = harness.windows[0]!;
+    harness.appEvents.get("before-quit")?.();
+    first.handlers.get("close")?.();
+    expect(harness.writeWindowState).not.toHaveBeenCalled();
+    harness.ipcListeners.get("meetings:cancel-close")?.({ sender: first.webContents });
+    closeWindow(harness, first);
+    expect(savedSessions(harness)).toEqual([]);
+  });
+
+  test("layout and geometry changes persist without waiting for a close", async () => {
+    vi.useFakeTimers();
+    const harness = loadMainHarness("darwin");
+    const first = harness.windows[0]!;
+    first.bounds = { height: 750, width: 800, x: 80, y: 40 };
+    first.handlers.get("resize")?.();
+    updateView(harness, first, visibleLayout, "docs/current.md");
+    await vi.advanceTimersByTimeAsync(100);
+    expect(savedSessions(harness)[0]).toMatchObject({
+      bounds: first.bounds,
+      layout: visibleLayout,
+      activePath: "docs/current.md",
+    });
+    expect(harness.writeWindowState).not.toHaveBeenCalled();
+  });
+
+  test("honors an explicit workspace while retaining crashed windows for recovery", async () => {
+    vi.stubEnv("NOTES_WORKSPACE", "/tmp/explicit-notes");
+    try {
+      const harness = loadMainHarness("darwin", true, [
+        { recoveryId: "primary", workspaceRoot: "/tmp/recovery-notes" },
+      ]);
+      expect(harness.windows).toHaveLength(2);
+      await expect(
+        harness.ipcHandlers.get("meetings:load-workspace")?.({
+          sender: harness.windows[1]!.webContents,
+        }),
+      ).resolves.toMatchObject({ workspacePath: "/tmp/explicit-notes" });
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  test("Command+N opens an independent window on the same note and workspace", async () => {
+    const harness = loadMainHarness("darwin");
+    const newWindow = getFileMenuItems(harness).find((item) => item.label === "New Window");
+    expect(newWindow?.accelerator).toBe("CommandOrControl+N");
+    newWindow?.click?.({}, harness.windows[0]);
+
+    expect(harness.windows).toHaveLength(2);
+    const second = harness.windows[1]!;
+    expect(second.loadURL).toHaveBeenCalledWith(expect.stringContaining("#/docs/todo.md"));
+    await expect(
+      harness.ipcHandlers.get("meetings:load-workspace")?.({ sender: second.webContents }),
+    ).resolves.toMatchObject({ workspacePath: "/tmp/notes-workspace" });
+    expect(harness.watcherCallbacks).toHaveLength(2);
+    expect(second.handlers.has("close")).toBe(true);
+    expect(second.webContents.setWindowOpenHandler).toHaveBeenCalledOnce();
+  });
+
+  test("New Window also works after the last macOS window closes", () => {
+    const harness = loadMainHarness("darwin");
+    harness.windows[0]!.handlers.get("closed")?.();
+    harness.windows.splice(0);
+    getFileMenuItems(harness)
+      .find((item) => item.label === "New Window")
+      ?.click?.({}, undefined);
+    expect(harness.windows).toHaveLength(1);
+  });
+
+  test.each([false, true])(
+    "publishes a save to peer windows only (lifecycle: %s)",
+    async (sync) => {
+      const harness = loadMainHarness("darwin");
+      const first = harness.windows[0]!;
+      getFileMenuItems(harness)
+        .find((item) => item.label === "New Window")
+        ?.click?.({}, first);
+      const second = harness.windows[1]!;
+      const document = { content: "Updated\n", hash: "updated", mtimeMs: 2, path: "docs/todo.md" };
+      harness.writeDocument.mockResolvedValue(document);
+      harness.writeDocumentSync.mockReturnValue(document);
+      const request = { baseHash: "old", content: document.content, path: document.path };
+      if (sync) {
+        harness.ipcListeners.get("meetings:save-document-sync")?.(
+          { sender: first.webContents },
+          request,
+        );
+      } else {
+        await harness.ipcHandlers.get("meetings:save-document")?.(
+          { sender: first.webContents },
+          request,
+        );
+      }
+      expect(first.webContents.send).not.toHaveBeenCalled();
+      expect(second.webContents.send).toHaveBeenCalledExactlyOnceWith("meetings:document-change", {
+        deleted: false,
+        document,
+        path: document.path,
+      });
+    },
+  );
+
+  test.each(["create", "restore"])("publishes %s operations to peer windows", async (operation) => {
+    const harness = loadMainHarness("darwin");
+    const first = harness.windows[0]!;
+    getFileMenuItems(harness)
+      .find((item) => item.label === "New Window")
+      ?.click?.({}, first);
+    const document = { content: "Created\n", hash: "created", mtimeMs: 2, path: "docs/new.md" };
+    harness.createWorkspaceDocument.mockResolvedValue(document);
+    harness.restoreDocument.mockResolvedValue(document);
+    await harness.ipcHandlers.get(`meetings:${operation}-document`)?.(
+      { sender: first.webContents },
+      {},
+    );
+    expect(harness.windows[1]!.webContents.send).toHaveBeenCalledWith("meetings:document-change", {
+      deleted: false,
+      document,
+      path: document.path,
+    });
+    expect(first.webContents.send).not.toHaveBeenCalled();
+  });
+
+  test("switching one window's workspace leaves other windows and writes isolated", async () => {
+    const harness = loadMainHarness("darwin");
+    const first = harness.windows[0]!;
+    const newWindow = getFileMenuItems(harness).find((item) => item.label === "New Window");
+    newWindow?.click?.({}, first);
+    const second = harness.windows[1]!;
+    harness.showOpenDialog.mockResolvedValue({ canceled: false, filePaths: ["/tmp/other-notes"] });
+    await harness.ipcHandlers.get("meetings:choose-workspace")?.({ sender: second.webContents });
+    const document = { content: "Updated\n", hash: "updated", mtimeMs: 2, path: "docs/todo.md" };
+    harness.writeDocument.mockResolvedValue(document);
+    await harness.ipcHandlers.get("meetings:save-document")?.(
+      { sender: first.webContents },
+      {
+        baseHash: "old",
+        content: document.content,
+        path: document.path,
+      },
+    );
+    expect(harness.writeDocument).toHaveBeenCalledWith(
+      expect.objectContaining({ root: "/tmp/notes-workspace" }),
+    );
+    expect(second.webContents.send).not.toHaveBeenCalled();
+    newWindow?.click?.({}, second);
+    await expect(
+      harness.ipcHandlers.get("meetings:load-workspace")?.({
+        sender: harness.windows[2]!.webContents,
+      }),
+    ).resolves.toMatchObject({ workspacePath: "/tmp/other-notes" });
+  });
+
+  test("restores each crashed window's recovery identity and removes only fully closed windows", () => {
+    const sessions = [
+      { recoveryId: "primary", workspaceRoot: "/tmp/notes-workspace" },
+      { recoveryId: "12345678-1234-1234-1234-123456789abc", workspaceRoot: "/tmp/notes-workspace" },
+    ];
+    const harness = loadMainHarness("darwin", true, sessions);
+    expect(harness.windows).toHaveLength(2);
+    const keys = harness.windows.map((window) => {
+      const event = { sender: window.webContents, returnValue: undefined };
+      harness.ipcListeners.get("meetings:recovery-key")?.(event);
+      return event.returnValue;
+    });
+    expect(keys[0]).toBe("notes.current-draft.v1");
+    expect(keys[1]).toContain(sessions[1]!.recoveryId);
+    harness.windows[1]!.handlers.get("close")?.();
+    expect(harness.writeOpenWindows).toHaveBeenLastCalledWith(
+      sessions.map((session) => expect.objectContaining(session)),
+      expect.any(String),
+    );
+    harness.windows[1]!.handlers.get("closed")?.();
+    expect(harness.writeOpenWindows).toHaveBeenLastCalledWith(
+      [expect.objectContaining(sessions[0]!)],
+      expect.any(String),
+    );
+  });
+
+  test("a blocked quit keeps watching documents until the app actually quits", () => {
+    const harness = loadMainHarness("darwin");
+    harness.appEvents.get("before-quit")?.();
+    expect(harness.watcherClose).not.toHaveBeenCalled();
+    harness.appEvents.get("will-quit")?.();
+    expect(harness.watcherClose).toHaveBeenCalled();
+  });
+
   test("allows the desktop window to resize to a compact width", () => {
     const harness = loadMainHarness("darwin");
 
@@ -400,7 +758,11 @@ describe("Electron persistence safety", () => {
 
     expect(harness.windows).toHaveLength(1);
     expect(harness.app.quit).not.toHaveBeenCalled();
-    await expect(harness.ipcHandlers.get("meetings:load-workspace")?.()).resolves.toEqual({
+    await expect(
+      harness.ipcHandlers.get("meetings:load-workspace")?.({
+        sender: harness.windows[0]!.webContents,
+      }),
+    ).resolves.toEqual({
       documents: [],
       metadataError: null,
       peoplePaths: [],
@@ -522,7 +884,11 @@ describe("Electron persistence safety", () => {
       peoplePaths: ["people/33-riley-example.md"],
     });
 
-    await expect(harness.ipcHandlers.get("meetings:load-workspace")?.()).resolves.toEqual({
+    await expect(
+      harness.ipcHandlers.get("meetings:load-workspace")?.({
+        sender: harness.windows[0]!.webContents,
+      }),
+    ).resolves.toEqual({
       documents: [
         {
           content: "# Tom\n",
@@ -653,7 +1019,7 @@ describe("Electron persistence safety", () => {
     expect(harness.sentChanges).toEqual([]);
   });
 
-  test("still recognizes a self-write after its short-lived watcher token expires", async () => {
+  test("recognizes a self-write regardless of how late its notification arrives", async () => {
     vi.useFakeTimers();
     const harness = loadMainHarness();
     const savedDocument: StoredDocument = {
@@ -680,6 +1046,64 @@ describe("Electron persistence safety", () => {
 
     expect(harness.sentChanges).toEqual([]);
   });
+
+  test.each([1, 7, 23, 89, 511, 2026, 8191, 65537])(
+    "randomized watcher reads never publish our own saves (seed %i)",
+    async (seed) => {
+      vi.useFakeTimers();
+      const random = () => {
+        seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+        return seed / 0x100000000;
+      };
+      const delay = (maximum: number) => new Promise<void>((resolve) =>
+        setTimeout(resolve, Math.floor(random() * maximum)),
+      );
+      const harness = loadMainHarness();
+      let disk: StoredDocument = { content: "Original\n", hash: "initial", mtimeMs: 1, path: "docs/todo.md" };
+      const notify = () => harness.watcherCallbacks[0]?.("rename", random() < 0.2 ? null : "todo.md");
+      harness.readDocument.mockImplementation(async () => {
+        const snapshot = disk;
+        await delay(1_500);
+        return snapshot;
+      });
+      harness.listDocuments.mockImplementation(async () => {
+        const snapshot = disk;
+        await delay(750);
+        return [snapshot];
+      });
+      harness.writeDocument.mockImplementation(async ({ baseHash, content }) => {
+        await delay(200);
+        expect(baseHash).toBe(disk.hash);
+        disk = { ...disk, content, hash: content, mtimeMs: disk.mtimeMs + 1 };
+        notify();
+        await delay(500);
+        return disk;
+      });
+      const save = harness.ipcHandlers.get("meetings:save-document")!;
+      const sender = harness.windows[0]!.webContents;
+      // Prime a committed version before allowing old read snapshots to race.
+      const first = save({ sender }, { baseHash: disk.hash, content: "First\n", path: disk.path });
+      await vi.advanceTimersByTimeAsync(2_000);
+      await first;
+      for (let edit = 0; edit < 300; edit++) {
+        notify();
+        await vi.advanceTimersByTimeAsync(Math.floor(random() * 150));
+        const pending = save({ sender }, { baseHash: disk.hash, content: `Edit ${edit}\n`, path: disk.path });
+        notify();
+        await vi.advanceTimersByTimeAsync(1_000 + Math.floor(random() * 500));
+        expect(await pending).toMatchObject({ status: "saved" });
+        expect(harness.sentChanges, `edit ${edit}`).toEqual([]);
+      }
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(harness.sentChanges).toEqual([]);
+      // The same watcher must still publish a real external replacement.
+      disk = { ...disk, content: "External edit\n", hash: "external" };
+      notify();
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(harness.sentChanges).toEqual([expect.objectContaining({ document: disk })]);
+    },
+    30_000,
+  );
 
   test("reconciles the workspace when fs.watch omits the filename", async () => {
     const harness = loadMainHarness();

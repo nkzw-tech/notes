@@ -13,6 +13,8 @@ test("uses asynchronous saves normally and synchronous saves only for lifecycle 
   const send = vi.fn();
   const invoke = vi.fn(() => Promise.resolve({ status: "saved" }));
   let exposedMeetings: {
+    updateWindowState: (state: unknown) => void;
+    cancelClose: () => void;
     chooseWorkspace: () => Promise<unknown>;
     completeInterview: (request: { path: string }) => Promise<unknown>;
     createDocument: (request: { kind: "doc"; title: string }) => Promise<unknown>;
@@ -53,6 +55,20 @@ test("uses asynchronous saves normally and synchronous saves only for lifecycle 
     require: mockedRequire,
     window: { addEventListener: vi.fn() },
   });
+
+  expect(sendSync).toHaveBeenCalledWith("meetings:recovery-key");
+  expect(sendSync).toHaveBeenCalledWith("meetings:window-layout");
+  sendSync.mockClear();
+
+  const viewState = {
+    layout: { sidebarCollapsed: true, sidebarWidth: 280, sectionExpanded: {} },
+    activePath: "docs/example.md",
+  };
+  exposedMeetings!.updateWindowState(viewState);
+  expect(send).toHaveBeenCalledWith("meetings:window-state", viewState);
+  expect(sendSync).not.toHaveBeenCalled();
+  exposedMeetings!.cancelClose();
+  expect(send).toHaveBeenCalledWith("meetings:cancel-close");
 
   const request = {
     baseHash: "old",

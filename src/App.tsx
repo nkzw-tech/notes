@@ -1,4 +1,13 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useLayoutEffect,
+} from "react";
 import type { EditableMarkdownHandle, SaveStatus } from "./EditableMarkdown.tsx";
 import { DocumentPalette } from "./DocumentPalette.tsx";
 import {
@@ -28,41 +37,15 @@ import {
 } from "./draftRecovery.ts";
 import { reconcileDeletedDocumentNavigation } from "./deletedDocumentState.ts";
 import { ChevronIcon, MenuIcon, SearchIcon, SidebarSimpleIcon } from "./icons.tsx";
-import {
-  isSidebarToggleShortcut,
-  readSidebarCollapsed,
-  writeSidebarCollapsed,
-} from "./sidebarVisibility.ts";
-import { readSidebarWidth, writeSidebarWidth } from "./sidebarWidth.ts";
+import { isSidebarToggleShortcut } from "./sidebarVisibility.ts";
 import { useResizableSidebar } from "./useResizableSidebar.ts";
+import {
+  readWindowLayout,
+  persistWindowLayout,
+  type CollapsibleGroup,
+} from "./windowLayout.ts";
 
 const EditableMarkdown = lazy(() => import("./EditableMarkdown.tsx"));
-
-const collapsibleGroups = [
-  "Reports",
-  "Interviews",
-  "Meetings Overview",
-  "Upcoming Meetings",
-  "People",
-  "Archive",
-] as const;
-
-type CollapsibleGroup = (typeof collapsibleGroups)[number];
-
-const getSectionStorageKey = (group: CollapsibleGroup) =>
-  `notes.sidebar.${group.toLocaleLowerCase().replaceAll(" ", "-")}.expanded`;
-
-const getStoredSectionState = () =>
-  Object.fromEntries(
-    collapsibleGroups.map((group) => {
-      try {
-        const value = window.localStorage.getItem(getSectionStorageKey(group));
-        return [group, value === null ? undefined : value === "true"];
-      } catch {
-        return [group, undefined];
-      }
-    }),
-  ) as Record<CollapsibleGroup, boolean | undefined>;
 
 const getPathFromHash = () => decodeURIComponent(window.location.hash.replace(/^#\/?/, ""));
 
@@ -181,8 +164,9 @@ function App() {
   const [orphanedRecoveryDraft, setOrphanedRecoveryDraft] = useState<RecoveryDraft | null>(null);
   const [query, setQuery] = useState("");
   const [saveIssue, setSaveIssue] = useState<SaveIssue | null>(null);
-  const [sectionExpanded, setSectionExpanded] = useState(getStoredSectionState);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsed);
+  const [initialLayout] = useState(readWindowLayout);
+  const [sectionExpanded, setSectionExpanded] = useState(initialLayout.sectionExpanded);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(initialLayout.sidebarCollapsed);
   const activePathRef = useRef(activePath);
   const documentsRef = useRef(documents);
   const editorRef = useRef<EditableMarkdownHandle>(null);
@@ -193,8 +177,7 @@ function App() {
   const peoplePathsRef = useRef<ReadonlySet<string>>(new Set());
   const searchRef = useRef<HTMLInputElement>(null);
   const { resizeSidebar, sidebarWidth } = useResizableSidebar({
-    onWidthCommit: writeSidebarWidth,
-    readWidth: readSidebarWidth,
+    readWidth: () => initialLayout.sidebarWidth,
   });
 
   const documentByPath = useMemo(
@@ -205,12 +188,12 @@ function App() {
   const { abandonedPath: abandonedDeletedPath, activeDeletedPath } =
     reconcileDeletedDocumentNavigation(deletedActivePath, activePath);
 
+  useLayoutEffect(() => {
+    persistWindowLayout({ sidebarCollapsed, sidebarWidth, sectionExpanded }, activeDocument?.path);
+  }, [sidebarCollapsed, sidebarWidth, sectionExpanded, activeDocument?.path]);
+
   const toggleSidebar = useCallback(() => {
-    setSidebarCollapsed((current) => {
-      const next = !current;
-      writeSidebarCollapsed(next);
-      return next;
-    });
+    setSidebarCollapsed((current) => !current);
   }, []);
 
   const filteredDocuments = useMemo(() => {
@@ -291,6 +274,10 @@ function App() {
     if (!window.meetings || workspaceSelectionPending) {
       return;
     }
+    if (orphanedRecoveryDraft) {
+      setLoadError("Restore or discard the recovered text before switching workspaces.");
+      return;
+    }
     const canNavigate = await (editorRef.current?.flush() ?? Promise.resolve(true));
     if (!canNavigate) {
       setLoadError("Resolve the current save issue before switching workspaces.");
@@ -308,7 +295,21 @@ function App() {
     } finally {
       setWorkspaceSelectionPending(false);
     }
-  }, [workspaceSelectionPending]);
+  }, [orphanedRecoveryDraft, workspaceSelectionPending]);
+
+  useEffect(() => {
+    if (!orphanedRecoveryDraft) {
+      return;
+    }
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+      window.meetings?.cancelClose?.();
+      setCloseBlockedError("Restore or discard the recovered text before closing this window.");
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [orphanedRecoveryDraft]);
 
   useEffect(() => {
     if (!window.meetings) {
@@ -478,12 +479,6 @@ function App() {
       }
       return { ...current, [group]: expanded };
     });
-
-    try {
-      window.localStorage.setItem(getSectionStorageKey(group), String(expanded));
-    } catch {
-      // Sidebar state is non-critical when storage is unavailable.
-    }
   };
 
   const handleNavigate = async (path: string) => {

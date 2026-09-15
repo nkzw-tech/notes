@@ -24,6 +24,7 @@
     "preview": "vite preview --host 127.0.0.1",
     "start": "pnpm build && electron .",
     "test": "vitest run",
+    "test:soak": "electron scripts/persistence-soak.cjs",
     "typecheck": "tsc -b"
   },
   "dependencies": {

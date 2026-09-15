@@ -2,6 +2,10 @@
 
 Notes is a local-first Markdown desktop app. Your documents live in a folder you control and are never bundled into the application.
 
+Open another window with **File → New Window** or <kbd>⌘</kbd><kbd>N</kbd> (<kbd>Ctrl</kbd><kbd>N</kbd> on Windows/Linux) to view notes side by side. Each window navigates independently, and saved edits update other windows on the same workspace. Concurrent edits require resolving a conflict before saving. Each window keeps its own crash recovery draft.
+
+New windows inherit the focused window's sidebar layout. Quitting the app restores all open windows on the next launch, including their notes, sidebar visibility and width, expanded sections, and window positions. Closing a window with <kbd>⌘</kbd><kbd>W</kbd> removes it from that session. If you close every window, the next window uses the last closed window's layout.
+
 ## Workspaces
 
 On first launch, choose an existing workspace or an empty folder. Notes remembers the selection in `~/.config/nkzw-notes/config.json`. Switch workspaces at any time with **File → Open Workspace…** or <kbd>⌘</kbd><kbd>O</kbd>.
@@ -52,6 +56,8 @@ pnpm package:app
 ```
 
 The packaged app is written to `out/Notes-darwin-arm64/Notes.app`. Signing and notarization are enabled when the corresponding Apple environment variables are provided.
+
+Persistence changes must preserve the [save ownership rules and stress tests](docs/persistence.md). After building, `pnpm test:soak` exercises six real minutes of typing and a save-aware quit in a disposable Electron workspace.
 
 ## Privacy
 

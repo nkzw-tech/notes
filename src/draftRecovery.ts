@@ -1,5 +1,10 @@
 export const RECOVERY_DRAFT_KEY = 'notes.current-draft.v1';
 
+const getRecoveryDraftKey = () =>
+  typeof window !== 'undefined' && window.meetings?.recoveryDraftKey
+    ? window.meetings.recoveryDraftKey
+    : RECOVERY_DRAFT_KEY;
+
 export type RecoveryDraft = {
   baseHash: string;
   content: string;
@@ -40,7 +45,7 @@ export const readRecoveryDraft = (
   }
   let serialized: string | null;
   try {
-    serialized = storage.getItem(RECOVERY_DRAFT_KEY);
+    serialized = storage.getItem(getRecoveryDraftKey());
   } catch {
     return null;
   }
@@ -54,7 +59,7 @@ export const readRecoveryDraft = (
     }
   } catch {}
   try {
-    storage.removeItem(RECOVERY_DRAFT_KEY);
+    storage.removeItem(getRecoveryDraftKey());
   } catch {}
   return null;
 };
@@ -68,7 +73,7 @@ export const writeRecoveryDraft = (
   }
   try {
     storage.setItem(
-      RECOVERY_DRAFT_KEY,
+      getRecoveryDraftKey(),
       JSON.stringify({ ...draft, updatedAt: Date.now() }),
     );
     return true;
@@ -90,7 +95,7 @@ export const clearRecoveryDraft = (
   const draft = readRecoveryDraft(storage);
   if (draft?.path === path) {
     try {
-      storage.removeItem(RECOVERY_DRAFT_KEY);
+      storage.removeItem(getRecoveryDraftKey());
     } catch {}
   }
 };

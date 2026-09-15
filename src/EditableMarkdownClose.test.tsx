@@ -38,11 +38,42 @@ afterEach(async () => {
   document.body.replaceChildren();
   delete window.meetings;
   vi.clearAllMocks();
+  state.flush.mockReset();
   state.dirty = true;
 });
 
 describe('desktop close coordination', () => {
-  test('signals close-ready only after the complete editor flush succeeds', async () => {
+  test.each([true, false])('drains an edit that arrives as the first flush completes (saved: %s)', async (saved) => {
+    state.flush
+      .mockResolvedValueOnce(true)
+      .mockImplementationOnce(async () => {
+        state.dirty = !saved;
+        return saved;
+      });
+    const readyToClose = vi.fn();
+    const cancelClose = vi.fn();
+    window.meetings = { readyToClose, cancelClose } as unknown as Window['meetings'];
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+    roots.push(root);
+    await act(async () => root.render(<EditableMarkdown
+      document={createMeetingDocument({
+        content: 'Disk text\n', hash: 'disk', mtimeMs: 1, path: 'docs/example.md',
+      }, new Set())}
+      onLocalChange={vi.fn()}
+      onNavigate={vi.fn()}
+      onStatusChange={vi.fn()}
+      onStoredChange={vi.fn()}
+      resolveLink={() => null}
+    />));
+    await act(async () => window.dispatchEvent(new Event('beforeunload', { cancelable: true })));
+    expect(state.flush).toHaveBeenCalledTimes(2);
+    expect(readyToClose).toHaveBeenCalledTimes(saved ? 1 : 0);
+    expect(cancelClose).toHaveBeenCalledTimes(saved ? 0 : 1);
+  });
+
+  test.each([true, false])('coordinates the complete editor flush (saved: %s)', async (saved) => {
     let resolveFlush!: (saved: boolean) => void;
     state.flush.mockReturnValue(
       new Promise((resolve) => {
@@ -50,8 +81,10 @@ describe('desktop close coordination', () => {
       }),
     );
     const readyToClose = vi.fn();
+    const cancelClose = vi.fn();
     window.meetings = {
       readyToClose,
+      cancelClose,
     } as unknown as Window['meetings'];
     const container = document.createElement('div');
     document.body.append(container);
@@ -82,7 +115,8 @@ describe('desktop close coordination', () => {
     expect(readyToClose).not.toHaveBeenCalled();
 
     state.dirty = false;
-    await act(async () => resolveFlush(true));
-    expect(readyToClose).toHaveBeenCalledOnce();
+    await act(async () => resolveFlush(saved));
+    expect(readyToClose).toHaveBeenCalledTimes(saved ? 1 : 0);
+    expect(cancelClose).toHaveBeenCalledTimes(saved ? 0 : 1);
   });
 });

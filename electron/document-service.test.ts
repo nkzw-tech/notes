@@ -98,6 +98,36 @@ afterEach(async () => {
 });
 
 describe('Electron document service', () => {
+  test("a synchronous close flush cannot overtake another window autosave", async () => {
+    const root = await createWorkspace();
+    const original = readDocumentSync(root, "docs/todo.md");
+    const pending = writeDocument({
+      baseHash: original.hash,
+      content: "# First window\n",
+      path: original.path,
+      root,
+    });
+    expect(() =>
+      writeDocumentSync({
+        baseHash: original.hash,
+        content: "# Closing window\n",
+        path: original.path,
+        root,
+      }),
+    ).toThrow("Another save is in progress");
+    await pending;
+    expect(readDocumentSync(root, original.path).content).toBe("# First window\n");
+    expect(() =>
+      writeDocumentSync({
+        baseHash: original.hash,
+        content: "# Closing window\n",
+        path: original.path,
+        root,
+      }),
+    ).toThrow(DocumentConflictError);
+  });
+
+
   test('lists visible Markdown and saves synchronously', async () => {
     const root = await createWorkspace();
     await expect(listDocuments(root)).resolves.toMatchObject([

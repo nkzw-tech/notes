@@ -110,53 +110,77 @@ export const EditableMarkdown = forwardRef<
   },
   forwardedRef,
 ) {
+  // The parent also uses document.content for live sidebar/title previews.
+  // It is not a persistence input after opening this keyed editor. Feeding
+  // render snapshots back into persistence can roll back an acknowledged save.
+  // Disk changes enter exclusively through applyExternalChange instead.
+  const [openedDocument] = useState(() => toPersistentDocument(document));
+  const [openedDraft] = useState(() => {
+    const draft = readRecoveryDraft();
+    return draft?.path === openedDocument.path ? draft : null;
+  });
   const editorRef =
     useRef<PersistentMarkdownEditorHandle<PersistedMeetingDocument>>(null);
   const formatAndSaveRef = useRef<Promise<boolean> | null>(null);
-  const storedDocumentRef = useRef<StoredDocument>(document);
+  const storedDocumentRef = useRef<StoredDocument>(openedDocument);
   const [recoveryDraft, setRecoveryDraft] = useState<RecoveryDraft | null>(
     () => {
-      const draft = readRecoveryDraft();
-      return draft?.path === document.path &&
-        draft.content !== fromStorageContent(document.content) &&
-        draft.baseHash !== document.hash
-        ? draft
+      return openedDraft &&
+        openedDraft.content !== fromStorageContent(openedDocument.content) &&
+        openedDraft.baseHash !== openedDocument.hash
+        ? openedDraft
         : null;
     },
   );
   const [recoveryStorageError, setRecoveryStorageError] = useState(false);
 
+  const recoveredRef = useRef(false);
   useEffect(() => {
-    storedDocumentRef.current = document;
-  }, [document.hash, document.mtimeMs, document.path]);
-
-  useEffect(() => {
-    const draft = readRecoveryDraft();
-    if (!draft || draft.path !== document.path) {
+    // Crash recovery is an opening operation, never a reaction to autosave or
+    // parent rendering. The live draft is maintained by the save callbacks.
+    if (recoveredRef.current || !openedDraft) {
       return;
     }
-    if (draft.content === fromStorageContent(document.content)) {
-      clearRecoveryDraft(document.path);
+    recoveredRef.current = true;
+    if (openedDraft.content === fromStorageContent(openedDocument.content)) {
+      clearRecoveryDraft(openedDocument.path);
       return;
     }
-    if (draft.baseHash !== document.hash) {
-      setRecoveryDraft(draft);
+    if (openedDraft.baseHash !== openedDocument.hash) {
       return;
     }
 
     const editor = editorRef.current;
-    if (editor && editor.getMarkdown() !== draft.content) {
-      editor.setMarkdown(draft.content);
+    if (editor && editor.getMarkdown() !== openedDraft.content) {
+      editor.setMarkdown(openedDraft.content);
       void editor.flush();
     }
-  }, [document.hash, document.path]);
+  }, [openedDocument, openedDraft]);
 
   useEffect(() => {
-    if (!window.meetings) {
-      return;
-    }
+    // Own lifecycle flushing here. A second beforeunload listener in the
+    // persistence component can finish a synchronous save and block unloading
+    // before this listener runs, leaving no one to acknowledge the close.
+    const editor = editorRef.current;
+    const flushPending = () =>
+      formatAndSaveRef.current ?? editor?.flush({ keepalive: true });
+    const onPageHide = () => {
+      if (!recoveryDraft && (formatAndSaveRef.current || editor?.hasUnsavedChanges())) {
+        void flushPending();
+      }
+    };
+    const onVisibilityChange = () => {
+      if (globalThis.document.visibilityState === 'hidden') {
+        onPageHide();
+      }
+    };
     const onBeforeUnload = (event: BeforeUnloadEvent) => {
-      const editor = editorRef.current;
+      if (recoveryDraft) {
+        window.meetings?.cancelClose?.();
+        event.preventDefault();
+        event.returnValue = '';
+        return;
+      }
       const pendingFormat = formatAndSaveRef.current;
       if (!pendingFormat && !editor?.hasUnsavedChanges()) {
         return;
@@ -164,16 +188,30 @@ export const EditableMarkdown = forwardRef<
 
       event.preventDefault();
       event.returnValue = '';
-      const flush = pendingFormat ?? editor!.flush({ keepalive: true });
-      void flush.then((saved) => {
+      void (async () => {
+        let saved = await (pendingFormat ?? editor!.flush({ keepalive: true }));
+        // Editor updates can arrive between a completed flush and this
+        // continuation. Drain them too; only a failed save cancels closing.
+        while (saved && editor?.hasUnsavedChanges()) {
+          saved = await editor.flush({ keepalive: true });
+        }
         if (saved && !editor?.hasUnsavedChanges()) {
           window.meetings?.readyToClose();
+        } else {
+          window.meetings?.cancelClose?.();
         }
-      });
+      })();
     };
     window.addEventListener('beforeunload', onBeforeUnload);
-    return () => window.removeEventListener('beforeunload', onBeforeUnload);
-  }, []);
+    window.addEventListener('pagehide', onPageHide);
+    globalThis.document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      window.removeEventListener('beforeunload', onBeforeUnload);
+      window.removeEventListener('pagehide', onPageHide);
+      globalThis.document.removeEventListener('visibilitychange', onVisibilityChange);
+      onPageHide();
+    };
+  }, [recoveryDraft]);
 
   useImperativeHandle(
     forwardedRef,
@@ -184,6 +222,9 @@ export const EditableMarkdown = forwardRef<
         );
       },
       formatAndSave() {
+        if (recoveryDraft) {
+          return Promise.resolve(false);
+        }
         const editor = editorRef.current;
         if (!editor) {
           return Promise.resolve(true);
@@ -265,6 +306,9 @@ export const EditableMarkdown = forwardRef<
         return request;
       },
       flush() {
+        if (recoveryDraft) {
+          return Promise.resolve(false);
+        }
         return (
           formatAndSaveRef.current ??
           editorRef.current?.flush() ??
@@ -273,6 +317,7 @@ export const EditableMarkdown = forwardRef<
       },
       hasUnsavedChanges() {
         return (
+          recoveryDraft !== null ||
           formatAndSaveRef.current !== null ||
           editorRef.current?.hasUnsavedChanges() === true
         );
@@ -295,7 +340,7 @@ export const EditableMarkdown = forwardRef<
         }
       },
     }),
-    [document.path, onStatusChange],
+    [document.path, onStatusChange, recoveryDraft],
   );
 
   return (
@@ -341,14 +386,23 @@ export const EditableMarkdown = forwardRef<
       <PersistentMarkdownEditor
         adapter={persistenceAdapter}
         className="meetings-markdown-editor"
-        document={toPersistentDocument(document)}
+        document={openedDocument}
+        lifecycleFlush={false}
         onDocumentChange={(persistentDocument) => {
           const storedDocument = toStoredDocument(persistentDocument);
           storedDocumentRef.current = storedDocument;
-          const editorContent = editorRef.current?.getMarkdown();
-          if (editorContent === fromStorageContent(storedDocument.content)) {
+          let editorContent = editorRef.current?.getMarkdown();
+          if (editorContent === undefined) {
+            // A navigation flush may acknowledge after the editor detaches.
+            const draft = readRecoveryDraft();
+            if (draft?.path === storedDocument.path) {
+              editorContent = draft.content;
+            }
+          }
+          // Keep recovered text until the user resolves it, even if another window saves.
+          if (!recoveryDraft && editorContent === fromStorageContent(storedDocument.content)) {
             clearRecoveryDraft(storedDocument.path);
-          } else if (editorContent !== undefined) {
+          } else if (!recoveryDraft && editorContent !== undefined) {
             setRecoveryStorageError(
               !writeRecoveryDraft({
                 baseHash: storedDocument.hash,

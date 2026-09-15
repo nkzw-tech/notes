@@ -6,7 +6,7 @@ import {
 import { clampSidebarWidth } from './sidebarWidth.ts';
 
 type UseResizableSidebarOptions = {
-  onWidthCommit: (width: number) => void;
+  onWidthCommit?: (width: number) => void;
   readWidth: () => number;
 };
 
@@ -55,7 +55,7 @@ export function useResizableSidebar({
       const handleEnd = () => {
         cleanup();
         setSidebarWidth((width) => {
-          onWidthCommit(width);
+          onWidthCommit?.(width);
           return width;
         });
       };

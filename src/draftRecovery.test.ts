@@ -17,6 +17,30 @@ const createStorage = () => {
 };
 
 describe('single-draft crash recovery', () => {
+  test("windows retain independent drafts even while editing the same document", () => {
+    const storage = createStorage();
+    const fakeWindow = { meetings: { recoveryDraftKey: "window-one" } };
+    vi.stubGlobal("window", fakeWindow);
+    try {
+      writeRecoveryDraft(
+        { baseHash: "base", content: "First draft", path: "docs/todo.md" },
+        storage,
+      );
+      fakeWindow.meetings.recoveryDraftKey = "window-two";
+      expect(readRecoveryDraft(storage)).toBeNull();
+      writeRecoveryDraft(
+        { baseHash: "base", content: "Second draft", path: "docs/todo.md" },
+        storage,
+      );
+      clearRecoveryDraft("docs/todo.md", storage);
+      fakeWindow.meetings.recoveryDraftKey = "window-one";
+      expect(readRecoveryDraft(storage)?.content).toBe("First draft");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+
   test('keeps only the latest unsaved text and clears it after saving', () => {
     vi.spyOn(Date, 'now').mockReturnValue(123);
     const storage = createStorage();

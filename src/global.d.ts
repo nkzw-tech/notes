@@ -1,6 +1,7 @@
 import type { StoredDocument } from "./content.ts";
 import type { DocumentChangeEvent } from "./documentApi.ts";
 import type { WorkspaceMetadataChangeEvent, WorkspaceSnapshot } from "./documentApi.ts";
+import type { WindowLayout } from "./windowLayout.ts";
 
 type SaveDocumentResult =
   | {
@@ -15,6 +16,10 @@ type SaveDocumentResult =
 declare global {
   interface Window {
     meetings?: {
+      initialWindowLayout?: WindowLayout | null;
+      updateWindowState?: (state: { layout: WindowLayout; activePath?: string }) => void;
+      cancelClose?: () => void;
+      recoveryDraftKey?: string;
       chooseWorkspace: () => Promise<
         { canceled: true; workspacePath?: never } | { canceled: false; workspacePath: string }
       >;

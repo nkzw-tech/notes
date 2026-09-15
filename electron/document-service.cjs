@@ -361,6 +361,10 @@ const restoreDocument = async (request) =>
  * @returns {StoredDocument}
  */
 const writeDocumentSync = ({ baseHash, content, path, root }) => {
+  // A lifecycle flush from another window must not overtake an async autosave.
+  if (pendingDocumentWrites.has(resolveDocumentPath(root, path).absolutePath)) {
+    throw new Error('Another save is in progress. Try again when it finishes.');
+  }
   if (Buffer.byteLength(content, 'utf8') > MAX_DOCUMENT_BYTES) {
     throw new Error('Document exceeds the 2 MB limit.');
   }

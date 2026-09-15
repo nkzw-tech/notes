@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act } from 'react';
+import { act, createRef } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { createMeetingDocument } from './content.ts';
@@ -17,7 +17,7 @@ vi.mock('./documentApi.ts', async (importOriginal) => ({
   ...api,
 }));
 
-import EditableMarkdown from './EditableMarkdown.tsx';
+import EditableMarkdown, { type EditableMarkdownHandle } from './EditableMarkdown.tsx';
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -54,11 +54,58 @@ afterEach(async () => {
   }
   document.body.replaceChildren();
   storage.clear();
+  delete window.meetings;
   vi.clearAllMocks();
 });
 
 describe('EditableMarkdown recovery integration', () => {
+  test('recovers an interrupted session once and saves against its original disk version', async () => {
+    const ref = createRef<EditableMarkdownHandle>();
+    const diskDocument = {
+      content: 'Saved disk text\n',
+      hash: 'disk-hash',
+      mtimeMs: 1,
+      path: 'docs/example.md',
+    };
+    window.localStorage.setItem(RECOVERY_DRAFT_KEY, JSON.stringify({
+      baseHash: diskDocument.hash,
+      content: 'Text from the interrupted session',
+      path: diskDocument.path,
+      updatedAt: 123,
+    }));
+    api.saveDocument.mockImplementation(async ({ content }) => ({
+      ...diskDocument,
+      content,
+      hash: 'recovered-hash',
+    }));
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+    roots.push(root);
+    await act(async () => root.render(<EditableMarkdown
+      ref={ref}
+      document={createMeetingDocument(diskDocument, new Set())}
+      onLocalChange={vi.fn()}
+      onNavigate={vi.fn()}
+      onStatusChange={vi.fn()}
+      onStoredChange={vi.fn()}
+      resolveLink={() => null}
+    />));
+    expect(api.saveDocument).toHaveBeenCalledExactlyOnceWith({
+      baseHash: 'disk-hash',
+      content: 'Text from the interrupted session\n',
+      keepalive: false,
+      path: diskDocument.path,
+    });
+    expect(container.querySelector('[data-kind="conflict"]')).toBeNull();
+    expect(container.querySelector('.mdx-editor-content')?.textContent).toBe('Text from the interrupted session');
+    expect(ref.current!.hasUnsavedChanges()).toBe(false);
+    expect(window.localStorage.getItem(RECOVERY_DRAFT_KEY)).toBeNull();
+  });
+
   test('locks the disk copy until a conflicting recovered draft is resolved', async () => {
+    window.meetings = { readyToClose: vi.fn() } as unknown as Window['meetings'];
+    const ref = createRef<EditableMarkdownHandle>();
     const path = 'docs/todo.md';
     const diskDocument = {
       content: 'Changed on disk\n',
@@ -88,6 +135,7 @@ describe('EditableMarkdown recovery integration', () => {
     await act(async () => {
       root.render(
         <EditableMarkdown
+          ref={ref}
           document={createMeetingDocument(diskDocument, new Set())}
           onLocalChange={vi.fn()}
           onNavigate={vi.fn()}
@@ -107,6 +155,16 @@ describe('EditableMarkdown recovery integration', () => {
         ?.getAttribute('contenteditable'),
     ).toBe('false');
 
+    const closeEvent = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(closeEvent);
+    expect(closeEvent.defaultPrevented).toBe(true);
+    await expect(ref.current!.flush()).resolves.toBe(false);
+    expect(ref.current!.hasUnsavedChanges()).toBe(true);
+    await act(async () => {
+      ref.current!.applyExternalChange({ ...diskDocument, content: 'Another window saved\n', hash: 'peer-hash' });
+    });
+    expect(window.localStorage.getItem(RECOVERY_DRAFT_KEY)).toContain('Recovered unsaved text');
+
     const restoreButton = [...container.querySelectorAll('button')].find(
       (button) => button.textContent === 'Restore recovered text',
     );
@@ -116,5 +174,6 @@ describe('EditableMarkdown recovery integration', () => {
         expect.objectContaining({ content: 'Recovered unsaved text\n' }),
       ),
     );
+    expect(window.localStorage.getItem(RECOVERY_DRAFT_KEY)).toBeNull();
   });
 });
