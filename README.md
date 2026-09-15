@@ -2,6 +2,8 @@
 
 Notes is a local-first Markdown desktop app. Your documents live in a folder you control and are never bundled into the application.
 
+Use <kbd>⌘</kbd><kbd>P</kbd> to search and switch between files. Use <kbd>⌘</kbd><kbd>K</kbd> for the full command palette, including file navigation and document actions. On Windows/Linux, use <kbd>Ctrl</kbd> instead of <kbd>⌘</kbd>.
+
 Open another window with **File → New Window** or <kbd>⌘</kbd><kbd>N</kbd> (<kbd>Ctrl</kbd><kbd>N</kbd> on Windows/Linux) to view notes side by side. Each window navigates independently, and saved edits update other windows on the same workspace. Concurrent edits require resolving a conflict before saving. Each window keeps its own crash recovery draft.
 
 New windows inherit the focused window's sidebar layout. Quitting the app restores all open windows on the next launch, including their notes, sidebar visibility and width, expanded sections, and window positions. Closing a window with <kbd>⌘</kbd><kbd>W</kbd> removes it from that session. If you close every window, the next window uses the last closed window's layout.

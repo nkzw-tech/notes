@@ -49,6 +49,7 @@ const getNamePlaceholder = (kind: CreateDocumentKind | null) =>
 export function DocumentPalette({
   activeDocument,
   documents,
+  filesOnly = false,
   onClose,
   onCompleteInterview,
   onCreate,
@@ -57,6 +58,7 @@ export function DocumentPalette({
 }: {
   activeDocument: MeetingDocument;
   documents: ReadonlyArray<MeetingDocument>;
+  filesOnly?: boolean;
   onClose: () => void;
   onCompleteInterview: (path: string) => Promise<void>;
   onCreate: (request: CreateDocumentRequest) => Promise<void>;
@@ -73,6 +75,7 @@ export function DocumentPalette({
   const filteredDocuments = filterPaletteDocuments(documents, query);
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const showCreateAction =
+    !filesOnly &&
     mode === "browse" && (!normalizedQuery || "create document new".includes(normalizedQuery));
   const destructiveMode =
     activeDocument.group === "Interviews" ? "complete-interview" : "delete-document";
@@ -81,6 +84,7 @@ export function DocumentPalette({
       ? "complete interview delete"
       : "delete document remove";
   const showDestructiveAction =
+    !filesOnly &&
     mode === "browse" &&
     (!normalizedQuery || destructiveSearchText.includes(normalizedQuery));
   const browseActionCount = Number(showCreateAction) + Number(showDestructiveAction);

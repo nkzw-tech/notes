@@ -156,7 +156,7 @@ function App() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [deletedActivePath, setDeletedActivePath] = useState<string | null>(null);
   const [closeBlockedError, setCloseBlockedError] = useState<string | null>(null);
-  const [documentPaletteOpen, setDocumentPaletteOpen] = useState(false);
+  const [documentPaletteScope, setDocumentPaletteScope] = useState<"all" | "files" | null>(null);
   const [workspaceMetadataError, setWorkspaceMetadataError] = useState<string | null>(null);
   const [workspacePath, setWorkspacePath] = useState<string | null | undefined>(undefined);
   const [workspaceSelectionPending, setWorkspaceSelectionPending] = useState(false);
@@ -386,7 +386,7 @@ function App() {
   useEffect(() => {
     const updatePath = () => {
       setActivePath(getPathFromHash());
-      setDocumentPaletteOpen(false);
+      setDocumentPaletteScope(null);
       setMobileNavigationOpen(false);
     };
 
@@ -422,11 +422,12 @@ function App() {
         return;
       }
 
-      if (commandKey && !event.altKey && !event.shiftKey && key === "k") {
+      if (commandKey && !event.altKey && !event.shiftKey && (key === "k" || key === "p")) {
         event.preventDefault();
         event.stopImmediatePropagation();
         setMobileNavigationOpen(false);
-        setDocumentPaletteOpen((current) => !current);
+        const scope = key === "p" ? "files" : "all";
+        setDocumentPaletteScope((current) => (current === scope ? null : scope));
         return;
       }
 
@@ -437,7 +438,7 @@ function App() {
       );
 
       if (event.key === "Escape") {
-        setDocumentPaletteOpen(false);
+        setDocumentPaletteScope(null);
         setMobileNavigationOpen(false);
         if (!editorHasFocus) {
           searchRef.current?.blur();
@@ -607,7 +608,7 @@ function App() {
 
   return (
     <div
-      className={`app-shell${sidebarCollapsed ? " sidebar-collapsed" : ""}${mobileNavigationOpen ? " mobile-navigation-open" : ""}${documentPaletteOpen ? " document-palette-open" : ""}`}
+      className={`app-shell${sidebarCollapsed ? " sidebar-collapsed" : ""}${mobileNavigationOpen ? " mobile-navigation-open" : ""}${documentPaletteScope ? " document-palette-open" : ""}`}
       style={
         sidebarCollapsed
           ? undefined
@@ -827,11 +828,13 @@ function App() {
         </div>
       </main>
 
-      {documentPaletteOpen ? (
+      {documentPaletteScope ? (
         <DocumentPalette
           activeDocument={activeDocument}
           documents={documents}
-          onClose={() => setDocumentPaletteOpen(false)}
+          filesOnly={documentPaletteScope === "files"}
+          key={documentPaletteScope}
+          onClose={() => setDocumentPaletteScope(null)}
           onCompleteInterview={handleCompleteInterview}
           onCreate={handleCreateDocument}
           onDeleteDocument={handleDeleteDocument}
