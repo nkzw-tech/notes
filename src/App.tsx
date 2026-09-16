@@ -551,8 +551,8 @@ function App() {
           <div className="workspace-guide-card">
             <h1>Choose your notes workspace</h1>
             <p>
-              Your Markdown files stay in a folder you control. Choose an existing workspace or
-              start with an empty folder.
+              Notes creates a markdown workspace for you. Choose an existing workspace or start
+              with an empty folder.
             </p>
             {loadError ? <p className="workspace-guide-error">{loadError}</p> : null}
             <button
