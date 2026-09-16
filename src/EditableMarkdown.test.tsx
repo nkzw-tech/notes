@@ -57,6 +57,95 @@ afterEach(async () => {
   vi.clearAllMocks();
 });
 
+describe('EditableMarkdown blank space', () => {
+  const renderEditor = async (content = 'First paragraph\n\nLast paragraph\n') => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+    roots.push(root);
+    await act(async () =>
+      root.render(
+        <EditableMarkdown
+          document={createMeetingDocument(
+            { content, hash: 'disk-hash', mtimeMs: 1, path: 'docs/example.md' },
+            new Set(),
+          )}
+          onLocalChange={vi.fn()}
+          onNavigate={vi.fn()}
+          onStatusChange={vi.fn()}
+          onStoredChange={vi.fn()}
+          resolveLink={() => null}
+        />,
+      ),
+    );
+    const editor = container.querySelector<HTMLElement>('.mdx-editor-content')!;
+    vi.spyOn(editor, 'getBoundingClientRect').mockReturnValue(new DOMRect(20, 20, 400, 200));
+    return { editor, scroll: container.querySelector<HTMLElement>('.document-scroll')! };
+  };
+
+  test.each(['First paragraph\n\nLast paragraph\n', ''])(
+    'clicking below the document focuses its end without editing: %j',
+    async (content) => {
+      const { editor, scroll } = await renderEditor(content);
+      const selection = window.getSelection()!;
+      await act(async () => {
+        editor.focus();
+        selection.selectAllChildren(editor);
+        selection.collapseToStart();
+      });
+      const click = new MouseEvent('mousedown', {
+        bubbles: true,
+        cancelable: true,
+        clientY: 250,
+      });
+      await act(async () => scroll.dispatchEvent(click));
+      expect(click.defaultPrevented).toBe(true);
+      expect(document.activeElement).toBe(editor);
+      expect(selection.isCollapsed).toBe(true);
+      const remaining = document.createRange();
+      remaining.selectNodeContents(editor);
+      remaining.setStart(selection.anchorNode!, selection.anchorOffset);
+      expect(remaining.toString()).toBe('');
+      expect(api.saveDocument).not.toHaveBeenCalled();
+      expect(window.localStorage.getItem(RECOVERY_DRAFT_KEY)).toBeNull();
+    },
+  );
+
+  test('restores focus from another control after a click below the document', async () => {
+    const { editor, scroll } = await renderEditor();
+    const button = document.createElement('button');
+    document.body.append(button);
+    button.focus();
+    await act(async () => {
+      scroll.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, clientY: 250 }));
+    });
+    expect(document.activeElement).toBe(editor);
+    expect(window.getSelection()!.isCollapsed).toBe(true);
+  });
+
+  test('leaves text clicks, side margins, context clicks, and read-only documents alone', async () => {
+    const { editor, scroll } = await renderEditor();
+    for (const [target, options] of [
+      [editor.firstElementChild!, { clientY: 250 }],
+      [scroll, { clientY: 100 }],
+      [scroll, { button: 2, clientY: 250 }],
+      [scroll, { clientY: 250, ctrlKey: true }],
+    ] satisfies Array<[Element, MouseEventInit]>) {
+      const click = new MouseEvent('mousedown', { bubbles: true, cancelable: true, ...options });
+      await act(async () => target.dispatchEvent(click));
+      expect(click.defaultPrevented).toBe(false);
+    }
+    editor.setAttribute('contenteditable', 'false');
+    const click = new MouseEvent('mousedown', {
+      bubbles: true,
+      cancelable: true,
+      clientY: 250,
+    });
+    await act(async () => scroll.dispatchEvent(click));
+    expect(click.defaultPrevented).toBe(false);
+  });
+});
+
 describe('EditableMarkdown recovery integration', () => {
   test('recovers an interrupted session once and saves against its original disk version', async () => {
     const ref = createRef<EditableMarkdownHandle>();
