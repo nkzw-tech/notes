@@ -1,12 +1,12 @@
-import type { StoredDocument } from "./content.ts";
-import type { WorkspaceMetadata } from "../workspace-metadata.ts";
+import type { WorkspaceMetadata } from '../workspace-metadata.ts';
+import type { StoredDocument } from './content.ts';
 
-const WORKSPACE_ENDPOINT = "/__meetings/workspace";
-const CREATE_ENDPOINT = "/__meetings/create";
-const DELETE_INTERVIEW_ENDPOINT = "/__meetings/interview";
-const DOCUMENT_ENDPOINT = "/__meetings/document";
-const FORMAT_ENDPOINT = "/__meetings/format";
-const RESTORE_ENDPOINT = "/__meetings/restore";
+const WORKSPACE_ENDPOINT = '/__meetings/workspace';
+const CREATE_ENDPOINT = '/__meetings/create';
+const DELETE_INTERVIEW_ENDPOINT = '/__meetings/interview';
+const DOCUMENT_ENDPOINT = '/__meetings/document';
+const FORMAT_ENDPOINT = '/__meetings/format';
+const RESTORE_ENDPOINT = '/__meetings/restore';
 
 export type DocumentChangeEvent =
   | {
@@ -24,12 +24,12 @@ export type WorkspaceMetadataChangeEvent =
   | { error?: string; metadata: WorkspaceMetadata };
 
 export type WorkspaceSnapshot = WorkspaceMetadata & {
-  documents: StoredDocument[];
+  documents: Array<StoredDocument>;
   metadataError: string | null;
   workspacePath: string | null;
 };
 
-export type CreateDocumentKind = "doc" | "interview" | "person" | "report";
+export type CreateDocumentKind = 'doc' | 'interview' | 'person' | 'report';
 
 export type CreateDocumentRequest = {
   kind: CreateDocumentKind;
@@ -37,7 +37,7 @@ export type CreateDocumentRequest = {
 };
 
 export const diffWorkspaceSnapshots = (previous: WorkspaceSnapshot, next: WorkspaceSnapshot) => {
-  const changes: DocumentChangeEvent[] = [];
+  const changes: Array<DocumentChangeEvent> = [];
   const previousByPath = new Map(previous.documents.map((document) => [document.path, document]));
   const nextPaths = new Set<string>();
   for (const document of next.documents) {
@@ -55,7 +55,7 @@ export const diffWorkspaceSnapshots = (previous: WorkspaceSnapshot, next: Worksp
     documentChanges: changes,
     metadataChanged:
       previous.metadataError !== next.metadataError ||
-      previous.peoplePaths.join("\0") !== next.peoplePaths.join("\0"),
+      previous.peoplePaths.join('\0') !== next.peoplePaths.join('\0'),
   };
 };
 
@@ -95,7 +95,7 @@ export const createPreviewWorkspacePoller = (load: () => Promise<WorkspaceSnapsh
       }
     } catch (error) {
       const change: WorkspaceMetadataChangeEvent = {
-        error: error instanceof Error ? error.message : "Failed to reconcile preview workspace.",
+        error: error instanceof Error ? error.message : 'Failed to reconcile preview workspace.',
       };
       for (const listener of metadataListeners) {
         listener(change);
@@ -108,7 +108,7 @@ export const createPreviewWorkspacePoller = (load: () => Promise<WorkspaceSnapsh
   const start = () => {
     if (timer === null) {
       void poll();
-      timer = window.setInterval(() => void poll(), 1_000);
+      timer = window.setInterval(() => void poll(), 1000);
     }
     return () => {
       if (timer !== null && documentListeners.size === 0 && metadataListeners.size === 0) {
@@ -149,7 +149,7 @@ export class SaveConflictError extends Error {
 
   constructor(document: StoredDocument) {
     super(`Document changed on disk: ${document.path}`);
-    this.name = "SaveConflictError";
+    this.name = 'SaveConflictError';
     this.document = document;
   }
 }
@@ -167,19 +167,19 @@ const requestWorkspace = async (): Promise<WorkspaceSnapshot> => {
   }
 
   const response = await fetch(WORKSPACE_ENDPOINT, {
-    cache: "no-store",
+    cache: 'no-store',
   });
   if (!response.ok) {
     throw new Error(await getResponseError(response));
   }
 
   const body = (await response.json()) as {
-    documents: StoredDocument[];
+    documents: Array<StoredDocument>;
     metadataError: string | null;
-    peoplePaths: string[];
+    peoplePaths: Array<string>;
     workspacePath?: string;
   };
-  return { ...body, workspacePath: body.workspacePath ?? "preview" };
+  return { ...body, workspacePath: body.workspacePath ?? 'preview' };
 };
 
 let workspaceLoadInFlight: Promise<WorkspaceSnapshot> | null = null;
@@ -211,8 +211,8 @@ export const createDocument = async (request: CreateDocumentRequest) => {
 
   const response = await fetch(CREATE_ENDPOINT, {
     body: JSON.stringify(request),
-    headers: { "Content-Type": "application/json" },
-    method: "POST",
+    headers: { 'Content-Type': 'application/json' },
+    method: 'POST',
   });
   const body = (await response.json().catch(() => null)) as {
     document?: StoredDocument;
@@ -231,8 +231,8 @@ export const completeInterview = async (path: string) => {
 
   const response = await fetch(DELETE_INTERVIEW_ENDPOINT, {
     body: JSON.stringify({ path }),
-    headers: { "Content-Type": "application/json" },
-    method: "DELETE",
+    headers: { 'Content-Type': 'application/json' },
+    method: 'DELETE',
   });
   const body = (await response.json().catch(() => null)) as {
     error?: string;
@@ -251,8 +251,8 @@ export const deleteDocument = async (path: string) => {
 
   const response = await fetch(DOCUMENT_ENDPOINT, {
     body: JSON.stringify({ path }),
-    headers: { "Content-Type": "application/json" },
-    method: "DELETE",
+    headers: { 'Content-Type': 'application/json' },
+    method: 'DELETE',
   });
   const body = (await response.json().catch(() => null)) as {
     error?: string;
@@ -284,10 +284,10 @@ export const saveDocument = async ({
       },
       keepalive,
     );
-    if (result.status === "conflict") {
+    if (result.status === 'conflict') {
       throw new SaveConflictError(result.document);
     }
-    if (result.status === "error") {
+    if (result.status === 'error') {
       throw new Error(result.error);
     }
     return result.document;
@@ -300,10 +300,10 @@ export const saveDocument = async ({
       path,
     }),
     headers: {
-      "Content-Type": "application/json",
+      'Content-Type': 'application/json',
     },
     keepalive,
-    method: "PUT",
+    method: 'PUT',
   });
 
   const body = (await response.json().catch(() => null)) as {
@@ -332,16 +332,16 @@ export const formatDocument = async ({ content, path }: { content: string; path:
       path,
     }),
     headers: {
-      "Content-Type": "application/json",
+      'Content-Type': 'application/json',
     },
-    method: "POST",
+    method: 'POST',
   });
   const body = (await response.json().catch(() => null)) as {
     content?: string;
     error?: string;
   } | null;
 
-  if (!response.ok || typeof body?.content !== "string") {
+  if (!response.ok || typeof body?.content !== 'string') {
     throw new Error(body?.error ?? `Format failed with status ${response.status}.`);
   }
 
@@ -354,8 +354,8 @@ export const restoreDocument = async ({ content, path }: { content: string; path
   }
   const response = await fetch(RESTORE_ENDPOINT, {
     body: JSON.stringify({ content, path }),
-    headers: { "Content-Type": "application/json" },
-    method: "POST",
+    headers: { 'Content-Type': 'application/json' },
+    method: 'POST',
   });
   const body = (await response.json().catch(() => null)) as {
     document?: StoredDocument;
@@ -376,8 +376,8 @@ export const subscribeToDocumentChanges = (callback: (change: DocumentChangeEven
   if (!hot) {
     return getPreviewWorkspacePoller().subscribeToDocumentChanges(callback);
   }
-  hot.on("meetings:document-change", callback);
-  return () => hot.off("meetings:document-change", callback);
+  hot.on('meetings:document-change', callback);
+  return () => hot.off('meetings:document-change', callback);
 };
 
 export const subscribeToWorkspaceMetadataChanges = (
@@ -391,6 +391,6 @@ export const subscribeToWorkspaceMetadataChanges = (
   if (!hot) {
     return getPreviewWorkspacePoller().subscribeToWorkspaceMetadataChanges(callback);
   }
-  hot.on("meetings:workspace-metadata-change", callback);
-  return () => hot.off("meetings:workspace-metadata-change", callback);
+  hot.on('meetings:workspace-metadata-change', callback);
+  return () => hot.off('meetings:workspace-metadata-change', callback);
 };

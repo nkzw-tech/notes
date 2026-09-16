@@ -1,8 +1,8 @@
 // @ts-check
 
-const { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } = require("node:fs");
-const { join } = require("node:path");
-const { normalizeWindowLayout } = require("./window-layout.cjs");
+const { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } = require('node:fs');
+const { join } = require('node:path');
+const { normalizeWindowLayout } = require('./window-layout.cjs');
 
 const MIN_WIDTH = 320;
 const MIN_HEIGHT = 520;
@@ -10,12 +10,12 @@ const MIN_OVERLAP = 100;
 
 /** @param {string} configDir */
 const readWindowState = (configDir) => {
-  const filePath = join(configDir, "window-state.json");
+  const filePath = join(configDir, 'window-state.json');
   if (!existsSync(filePath)) {
     return null;
   }
   try {
-    const state = JSON.parse(readFileSync(filePath, "utf8"));
+    const state = JSON.parse(readFileSync(filePath, 'utf8'));
     return normalizeWindowState(state);
   } catch {
     return null;
@@ -24,10 +24,10 @@ const readWindowState = (configDir) => {
 
 const normalizeWindowState = (state) => {
   if (
-    typeof state?.x !== "number" ||
-    typeof state?.y !== "number" ||
-    typeof state?.width !== "number" ||
-    typeof state?.height !== "number" ||
+    typeof state?.x !== 'number' ||
+    typeof state?.y !== 'number' ||
+    typeof state?.width !== 'number' ||
+    typeof state?.height !== 'number' ||
     !Number.isFinite(state.x) ||
     !Number.isFinite(state.y) ||
     !Number.isFinite(state.width) ||
@@ -54,7 +54,7 @@ const writeWindowState = (state, configDir) => {
   if (!existsSync(configDir)) {
     mkdirSync(configDir, { recursive: true });
   }
-  const target = join(configDir, "window-state.json");
+  const target = join(configDir, 'window-state.json');
   writeFileSync(`${target}.tmp`, `${JSON.stringify(state, null, 2)}\n`, { mode: 0o600 });
   renameSync(`${target}.tmp`, target);
 };

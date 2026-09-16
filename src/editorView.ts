@@ -24,8 +24,7 @@ const getTopLevelBlock = (root: HTMLElement, node: Node) => {
 
 const getBlockText = (node: Node) => node.textContent ?? '';
 
-const getLogicalText = (root: HTMLElement) =>
-  Array.from(root.childNodes, getBlockText).join('\n');
+const getLogicalText = (root: HTMLElement) => Array.from(root.childNodes, getBlockText).join('\n');
 
 const getBlockTextOffset = (block: Node, node: Node, offset: number) => {
   const range = globalThis.document.createRange();
@@ -34,11 +33,7 @@ const getBlockTextOffset = (block: Node, node: Node, offset: number) => {
   return range.toString().length;
 };
 
-const capturePoint = (
-  root: HTMLElement,
-  node: Node | null,
-  offset: number,
-) => {
+const capturePoint = (root: HTMLElement, node: Node | null, offset: number) => {
   if (!node || !root.contains(node)) {
     return null;
   }
@@ -90,11 +85,7 @@ export const captureEditorView = (
   };
 };
 
-export const mapOffsetThroughEdits = (
-  before: string,
-  after: string,
-  targetOffset: number,
-) => {
+export const mapOffsetThroughEdits = (before: string, after: string, targetOffset: number) => {
   let beforeOffset = 0;
   let afterOffset = 0;
 
@@ -125,10 +116,7 @@ export const mapOffsetThroughEdits = (
 };
 
 const resolveTextOffset = (root: Node, targetOffset: number) => {
-  const walker = globalThis.document.createTreeWalker(
-    root,
-    NodeFilter.SHOW_TEXT,
-  );
+  const walker = globalThis.document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   let remaining = targetOffset;
   let node = walker.nextNode();
   let lastTextNode: Node | null = null;
@@ -198,26 +186,13 @@ export const restoreEditorView = (
     const logicalText = getLogicalText(contentEditable);
     const anchor = resolveLogicalOffset(
       contentEditable,
-      mapOffsetThroughEdits(
-        snapshot.logicalText,
-        logicalText,
-        snapshot.anchor.logicalOffset,
-      ),
+      mapOffsetThroughEdits(snapshot.logicalText, logicalText, snapshot.anchor.logicalOffset),
     );
     const focus = resolveLogicalOffset(
       contentEditable,
-      mapOffsetThroughEdits(
-        snapshot.logicalText,
-        logicalText,
-        snapshot.focus.logicalOffset,
-      ),
+      mapOffsetThroughEdits(snapshot.logicalText, logicalText, snapshot.focus.logicalOffset),
     );
-    selection.setBaseAndExtent(
-      anchor.node,
-      anchor.offset,
-      focus.node,
-      focus.offset,
-    );
+    selection.setBaseAndExtent(anchor.node, anchor.offset, focus.node, focus.offset);
   }
 
   scrollContainer.scrollTop = snapshot.scrollTop;

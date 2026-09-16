@@ -13,9 +13,7 @@ export const applyStoredDocumentChanges = (
   documents: ReadonlyArray<StoredDocument>,
   changes: Iterable<StoredDocumentChange>,
 ) => {
-  const byPath = new Map(
-    documents.map((document) => [document.path, document]),
-  );
+  const byPath = new Map(documents.map((document) => [document.path, document]));
   for (const change of changes) {
     if (change.deleted) {
       byPath.delete(change.path);
@@ -43,19 +41,12 @@ export type MeetingDocument = StoredDocument & {
 };
 
 const decodeCharacterReferences = (value: string) =>
-  value.replace(
+  value.replaceAll(
     /&(?:#(\d+)|#x([\da-f]+)|amp|apos|gt|lt|quot);/gi,
-    (
-      reference,
-      decimal: string | undefined,
-      hexadecimal: string | undefined,
-    ) => {
+    (reference, decimal: string | undefined, hexadecimal: string | undefined) => {
       if (decimal || hexadecimal) {
-        const codePoint = Number.parseInt(
-          decimal ?? hexadecimal!,
-          decimal ? 10 : 16,
-        );
-        return Number.isSafeInteger(codePoint) && codePoint <= 0x10ffff
+        const codePoint = Number.parseInt(decimal ?? hexadecimal!, decimal ? 10 : 16);
+        return Number.isSafeInteger(codePoint) && codePoint <= 0x10_ff_ff
           ? String.fromCodePoint(codePoint)
           : reference;
       }
@@ -73,7 +64,7 @@ const decodeCharacterReferences = (value: string) =>
   );
 
 const decodeMarkdownEscapes = (value: string) =>
-  value.replace(/\\(.)/g, (match, character: string) =>
+  value.replaceAll(/\\(.)/g, (match, character: string) =>
     /[!-/:-@[-`{-~]/.test(character) ? character : match,
   );
 
@@ -111,9 +102,8 @@ const getReportCue = (content: string) => {
   const level = rawLevel ? decodeSidebarLine(rawLevel) : null;
   const title = rawTitle ? decodeSidebarLine(rawTitle) : null;
   return (
-    [level, title]
-      .filter((value) => value && !value.startsWith('Not yet available'))
-      .join(' · ') || null
+    [level, title].filter((value) => value && !value.startsWith('Not yet available')).join(' · ') ||
+    null
   );
 };
 
@@ -122,22 +112,16 @@ const getReportLevel = (content: string) => {
   return match ? Number(match[1]) : -1;
 };
 
-const isArchived = (content: string) =>
-  /^\*\*Archived:\*\*\s*.+$/m.test(content);
+const isArchived = (content: string) => /^\*\*Archived:\*\*\s*.+$/m.test(content);
 
 const getNumber = (path: string) => {
   const match = path.match(/^(?:interviews|people)\/(\d+)-/);
   return match ? Number(match[1]) : null;
 };
 
-const getMeetingDate = (path: string) =>
-  path.match(/\d{4}-\d{2}-\d{2}/)?.[0] ?? '';
+const getMeetingDate = (path: string) => path.match(/\d{4}-\d{2}-\d{2}/)?.[0] ?? '';
 
-const getGroup = (
-  path: string,
-  archived: boolean,
-  met: boolean,
-): MeetingDocument['group'] => {
+const getGroup = (path: string, archived: boolean, met: boolean): MeetingDocument['group'] => {
   if (path.startsWith('docs/')) {
     return 'Docs';
   }
@@ -164,11 +148,7 @@ export const createMeetingDocument = (
   peoplePaths: ReadonlySet<string>,
 ): MeetingDocument => {
   const archived = isArchived(document.content);
-  const group = getGroup(
-    document.path,
-    archived,
-    peoplePaths.has(document.path),
-  );
+  const group = getGroup(document.path, archived, peoplePaths.has(document.path));
   const cue = document.path.startsWith('reports/')
     ? getReportCue(document.content)
     : getCue(document.content);
@@ -198,8 +178,7 @@ export const sortDocuments = (documents: ReadonlyArray<MeetingDocument>) =>
       return getMeetingDate(a.path).localeCompare(getMeetingDate(b.path));
     }
     if (a.group === 'Reports' && b.group === 'Reports') {
-      const levelDifference =
-        getReportLevel(b.content) - getReportLevel(a.content);
+      const levelDifference = getReportLevel(b.content) - getReportLevel(a.content);
       return levelDifference || a.title.localeCompare(b.title);
     }
     if (a.number !== null && b.number !== null) {
@@ -211,10 +190,7 @@ export const sortDocuments = (documents: ReadonlyArray<MeetingDocument>) =>
 export const createMeetingDocuments = (
   documents: ReadonlyArray<StoredDocument>,
   peoplePaths: ReadonlySet<string>,
-) =>
-  sortDocuments(
-    documents.map((document) => createMeetingDocument(document, peoplePaths)),
-  );
+) => sortDocuments(documents.map((document) => createMeetingDocument(document, peoplePaths)));
 
 export const replaceDocument = (
   documents: ReadonlyArray<MeetingDocument>,
@@ -222,9 +198,7 @@ export const replaceDocument = (
   peoplePaths: ReadonlySet<string>,
 ) => {
   const nextDocument = createMeetingDocument(storedDocument, peoplePaths);
-  const existingIndex = documents.findIndex(
-    (document) => document.path === storedDocument.path,
-  );
+  const existingIndex = documents.findIndex((document) => document.path === storedDocument.path);
 
   if (existingIndex === -1) {
     return sortDocuments([...documents, nextDocument]);

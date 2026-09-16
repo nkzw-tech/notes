@@ -1,30 +1,13 @@
 import {
-  forwardRef,
-  useEffect,
-  useImperativeHandle,
-  useRef,
-  useState,
-} from 'react';
-import {
   PersistentMarkdownEditor,
   type MarkdownDocument,
   type MarkdownPersistenceAdapter,
   type MarkdownSaveStatus,
   type PersistentMarkdownEditorHandle,
 } from '@nkzw/mdx-editor/persistence';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import type { MeetingDocument, StoredDocument } from './content.ts';
-import {
-  formatDocument,
-  SaveConflictError,
-  restoreDocument,
-  saveDocument,
-} from './documentApi.ts';
-import {
-  beginEditorVisualSwap,
-  captureEditorView,
-  restoreEditorView,
-  waitForEditorUpdate,
-} from './editorView.ts';
+import { formatDocument, SaveConflictError, restoreDocument, saveDocument } from './documentApi.ts';
 import {
   clearRecoveryDraft,
   fromStorageContent,
@@ -32,59 +15,60 @@ import {
   type RecoveryDraft,
   writeRecoveryDraft,
 } from './draftRecovery.ts';
+import {
+  beginEditorVisualSwap,
+  captureEditorView,
+  restoreEditorView,
+  waitForEditorUpdate,
+} from './editorView.ts';
 
 type PersistedMeetingDocument = MarkdownDocument & StoredDocument;
 
-const toPersistentDocument = (
-  document: StoredDocument,
-): PersistedMeetingDocument => ({
+const toPersistentDocument = (document: StoredDocument): PersistedMeetingDocument => ({
   ...document,
   id: document.path,
   version: document.hash,
 });
 
-const toStoredDocument = (
-  document: PersistedMeetingDocument,
-): StoredDocument => ({
+const toStoredDocument = (document: PersistedMeetingDocument): StoredDocument => ({
   content: document.content,
   hash: document.version,
   mtimeMs: document.mtimeMs,
   path: document.path,
 });
 
-const persistenceAdapter: MarkdownPersistenceAdapter<PersistedMeetingDocument> =
-  {
-    async save({ content, document, keepalive }) {
-      try {
+const persistenceAdapter: MarkdownPersistenceAdapter<PersistedMeetingDocument> = {
+  async save({ content, document, keepalive }) {
+    try {
+      return {
+        document: toPersistentDocument(
+          await saveDocument({
+            baseHash: document.version,
+            content,
+            keepalive,
+            path: document.path,
+          }),
+        ),
+        status: 'saved',
+      };
+    } catch (error) {
+      if (error instanceof SaveConflictError) {
         return {
-          document: toPersistentDocument(
-            await saveDocument({
-              baseHash: document.version,
-              content,
-              keepalive,
-              path: document.path,
-            }),
-          ),
-          status: 'saved',
+          document: toPersistentDocument(error.document),
+          status: 'conflict',
         };
-      } catch (error) {
-        if (error instanceof SaveConflictError) {
-          return {
-            document: toPersistentDocument(error.document),
-            status: 'conflict',
-          };
-        }
-        throw error;
       }
-    },
-  };
+      throw error;
+    }
+  },
+};
 
 export type SaveStatus = MarkdownSaveStatus;
 
 export type EditableMarkdownHandle = {
   applyExternalChange: (document: StoredDocument) => void;
-  formatAndSave: () => Promise<boolean>;
   flush: () => Promise<boolean>;
+  formatAndSave: () => Promise<boolean>;
   hasUnsavedChanges: () => boolean;
   restoreDeletedDocument: () => Promise<boolean>;
 };
@@ -100,14 +84,7 @@ export const EditableMarkdown = forwardRef<
     resolveLink: (href: string) => string | null;
   }
 >(function EditableMarkdown(
-  {
-    document,
-    onLocalChange,
-    onNavigate,
-    onStatusChange,
-    onStoredChange,
-    resolveLink,
-  },
+  { document, onLocalChange, onNavigate, onStatusChange, onStoredChange, resolveLink },
   forwardedRef,
 ) {
   // The parent also uses document.content for live sidebar/title previews.
@@ -119,19 +96,16 @@ export const EditableMarkdown = forwardRef<
     const draft = readRecoveryDraft();
     return draft?.path === openedDocument.path ? draft : null;
   });
-  const editorRef =
-    useRef<PersistentMarkdownEditorHandle<PersistedMeetingDocument>>(null);
+  const editorRef = useRef<PersistentMarkdownEditorHandle<PersistedMeetingDocument>>(null);
   const formatAndSaveRef = useRef<Promise<boolean> | null>(null);
   const storedDocumentRef = useRef<StoredDocument>(openedDocument);
-  const [recoveryDraft, setRecoveryDraft] = useState<RecoveryDraft | null>(
-    () => {
-      return openedDraft &&
-        openedDraft.content !== fromStorageContent(openedDocument.content) &&
-        openedDraft.baseHash !== openedDocument.hash
-        ? openedDraft
-        : null;
-    },
-  );
+  const [recoveryDraft, setRecoveryDraft] = useState<RecoveryDraft | null>(() => {
+    return openedDraft &&
+      openedDraft.content !== fromStorageContent(openedDocument.content) &&
+      openedDraft.baseHash !== openedDocument.hash
+      ? openedDraft
+      : null;
+  });
   const [recoveryStorageError, setRecoveryStorageError] = useState(false);
 
   const recoveredRef = useRef(false);
@@ -162,8 +136,7 @@ export const EditableMarkdown = forwardRef<
     // persistence component can finish a synchronous save and block unloading
     // before this listener runs, leaving no one to acknowledge the close.
     const editor = editorRef.current;
-    const flushPending = () =>
-      formatAndSaveRef.current ?? editor?.flush({ keepalive: true });
+    const flushPending = () => formatAndSaveRef.current ?? editor?.flush({ keepalive: true });
     const onPageHide = () => {
       if (!recoveryDraft && (formatAndSaveRef.current || editor?.hasUnsavedChanges())) {
         void flushPending();
@@ -217,9 +190,13 @@ export const EditableMarkdown = forwardRef<
     forwardedRef,
     () => ({
       applyExternalChange(storedDocument) {
-        editorRef.current?.applyExternalChange(
-          toPersistentDocument(storedDocument),
-        );
+        editorRef.current?.applyExternalChange(toPersistentDocument(storedDocument));
+      },
+      flush() {
+        if (recoveryDraft) {
+          return Promise.resolve(false);
+        }
+        return formatAndSaveRef.current ?? editorRef.current?.flush() ?? Promise.resolve(true);
       },
       formatAndSave() {
         if (recoveryDraft) {
@@ -255,12 +232,10 @@ export const EditableMarkdown = forwardRef<
               return editor.flush();
             }
 
-            const contentEditable =
-              globalThis.document.querySelector<HTMLElement>(
-                '.meetings-markdown-editor .mdx-editor-content[contenteditable="true"]',
-              );
-            const scrollContainer =
-              contentEditable?.closest<HTMLElement>('.document-scroll');
+            const contentEditable = globalThis.document.querySelector<HTMLElement>(
+              '.meetings-markdown-editor .mdx-editor-content[contenteditable="true"]',
+            );
+            const scrollContainer = contentEditable?.closest<HTMLElement>('.document-scroll');
             const viewSnapshot =
               contentEditable && scrollContainer
                 ? captureEditorView(contentEditable, scrollContainer)
@@ -268,9 +243,7 @@ export const EditableMarkdown = forwardRef<
             const editorUpdate = contentEditable
               ? waitForEditorUpdate(contentEditable)
               : Promise.resolve();
-            let finishVisualSwap = contentEditable
-              ? beginEditorVisualSwap(contentEditable)
-              : null;
+            let finishVisualSwap = contentEditable ? beginEditorVisualSwap(contentEditable) : null;
 
             try {
               editor.setMarkdown(editorContent);
@@ -281,11 +254,7 @@ export const EditableMarkdown = forwardRef<
               finishVisualSwap = null;
 
               if (contentEditable && scrollContainer && viewSnapshot) {
-                restoreEditorView(
-                  contentEditable,
-                  scrollContainer,
-                  viewSnapshot,
-                );
+                restoreEditorView(contentEditable, scrollContainer, viewSnapshot);
               }
 
               return save;
@@ -304,16 +273,6 @@ export const EditableMarkdown = forwardRef<
 
         formatAndSaveRef.current = request;
         return request;
-      },
-      flush() {
-        if (recoveryDraft) {
-          return Promise.resolve(false);
-        }
-        return (
-          formatAndSaveRef.current ??
-          editorRef.current?.flush() ??
-          Promise.resolve(true)
-        );
       },
       hasUnsavedChanges() {
         return (
@@ -348,8 +307,7 @@ export const EditableMarkdown = forwardRef<
       {recoveryDraft ? (
         <div className="mdx-editor-notice" data-kind="conflict" role="alert">
           <span>
-            Unsaved text from the previous session was recovered, but the file
-            also changed on disk.
+            Unsaved text from the previous session was recovered, but the file also changed on disk.
           </span>
           <div>
             <button
@@ -379,8 +337,7 @@ export const EditableMarkdown = forwardRef<
       ) : null}
       {recoveryStorageError ? (
         <div className="mdx-editor-notice" data-kind="error" role="alert">
-          Crash recovery storage is unavailable. Keep Notes open until the save
-          succeeds.
+          Crash recovery storage is unavailable. Keep Notes open until the save succeeds.
         </div>
       ) : null}
       <PersistentMarkdownEditor

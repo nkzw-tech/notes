@@ -1,10 +1,11 @@
 import { createHash } from 'node:crypto';
-import { fileURLToPath } from 'node:url';
+import { availableParallelism } from 'node:os';
 import { relative, resolve } from 'node:path';
+import nkzw from '@nkzw/oxlint-config';
 import babel from '@rolldown/plugin-babel';
 import react, { reactCompilerPreset } from '@vitejs/plugin-react';
-import type { Plugin, ViteDevServer } from 'vite';
-import { defineConfig } from 'vitest/config';
+import type { Plugin, ViteDevServer } from 'vite-plus';
+import { defineConfig } from 'vite-plus';
 import {
   createDocumentMiddleware,
   DOCUMENT_DIRECTORIES,
@@ -19,7 +20,7 @@ import {
   WORKSPACE_METADATA_PATH,
 } from './workspace-metadata.ts';
 
-const appRoot = fileURLToPath(new URL('.', import.meta.url));
+const appRoot = import.meta.dirname;
 const workspaceRoot = resolve(
   process.env.NOTES_WORKSPACE ??
     process.env.MEETINGS_WORKSPACE ??
@@ -47,7 +48,7 @@ const documentServicePlugin = (): Plugin => {
           expectedWriteHashes.delete(path);
         }
         expectedWriteTimers.delete(path);
-      }, 2_000),
+      }, 2000),
     );
   };
 
@@ -65,21 +66,12 @@ const documentServicePlugin = (): Plugin => {
     return expectedHash === hash;
   };
 
-  const rememberExpectedWrite = ({
-    content,
-    path,
-  }: {
-    content: string;
-    path: string;
-  }) => {
+  const rememberExpectedWrite = ({ content, path }: { content: string; path: string }) => {
     const normalizedPath = normalizeDocumentPath(path);
     if (!normalizedPath) {
       return;
     }
-    rememberWriteHash(
-      normalizedPath,
-      createHash('sha256').update(content).digest('hex'),
-    );
+    rememberWriteHash(normalizedPath, createHash('sha256').update(content).digest('hex'));
   };
 
   const rememberWrite = (document: StoredDocument) => {
@@ -88,19 +80,14 @@ const documentServicePlugin = (): Plugin => {
   };
 
   const getDocumentPath = (absolutePath: string) =>
-    normalizeDocumentPath(
-      relative(workspaceRoot, absolutePath).replaceAll('\\', '/'),
-    );
+    normalizeDocumentPath(relative(workspaceRoot, absolutePath).replaceAll('\\', '/'));
 
   const isWorkspaceMetadataPath = (absolutePath: string) =>
-    relative(workspaceRoot, absolutePath).replaceAll('\\', '/') ===
-    WORKSPACE_METADATA_PATH;
+    relative(workspaceRoot, absolutePath).replaceAll('\\', '/') === WORKSPACE_METADATA_PATH;
 
   const attachWatcher = (server: ViteDevServer) => {
     server.watcher.add([
-      ...[...DOCUMENT_DIRECTORIES].map((directory) =>
-        resolve(workspaceRoot, directory),
-      ),
+      ...[...DOCUMENT_DIRECTORIES].map((directory) => resolve(workspaceRoot, directory)),
       resolve(workspaceRoot, WORKSPACE_METADATA_PATH),
     ]);
 
@@ -119,9 +106,7 @@ const documentServicePlugin = (): Plugin => {
           new Set(documents.map(({ path }) => path)),
         );
         data = {
-          ...(reconciled.metadataError
-            ? { error: reconciled.metadataError }
-            : {}),
+          ...(reconciled.metadataError ? { error: reconciled.metadataError } : {}),
           metadata: { peoplePaths: reconciled.peoplePaths },
         };
       } catch (error) {
@@ -225,7 +210,6 @@ const documentServicePlugin = (): Plugin => {
   };
 
   return {
-    name: 'meetings-document-service',
     configurePreviewServer(server) {
       server.middlewares.use(
         createDocumentMiddleware({
@@ -243,16 +227,47 @@ const documentServicePlugin = (): Plugin => {
       );
       attachWatcher(server);
     },
+    name: 'meetings-document-service',
   };
 };
 
 export default defineConfig({
   base: './',
-  plugins: [
-    react(),
-    babel({ presets: [reactCompilerPreset()] }),
-    documentServicePlugin(),
-  ],
+  fmt: {
+    experimentalSortImports: { newlinesBetween: false },
+    experimentalSortPackageJson: { sortScripts: true },
+    ignorePatterns: [
+      'coverage/',
+      'dist/',
+      'out/',
+      '.cache/',
+      '.vite-hooks/',
+      'index.html',
+      'pnpm-lock.yaml',
+    ],
+    singleQuote: true,
+  },
+  lint: {
+    extends: [nkzw],
+    ignorePatterns: [
+      'dist/',
+      'out/',
+      '.cache/',
+      '.vite-hooks/',
+      'electron/',
+      'scripts/',
+      'vite.config.ts.timestamp-*',
+    ],
+    options: { typeAware: true, typeCheck: true },
+    overrides: [{ env: { node: true }, files: ['forge.config.cjs'] }],
+  },
+  plugins: [react(), babel({ presets: [reactCompilerPreset()] }), documentServicePlugin()],
+  run: {
+    tasks: {
+      'test:all': { command: 'vp check && vp test' },
+    },
+  },
+  staged: { '*': 'vp check --fix' },
   test: {
     include: [
       'document-service.test.ts',
@@ -261,5 +276,6 @@ export default defineConfig({
       'electron/**/*.test.ts',
       'src/**/*.test.{ts,tsx}',
     ],
+    maxWorkers: Math.max(1, Math.min(4, Math.floor(availableParallelism() / 6))),
   },
 });

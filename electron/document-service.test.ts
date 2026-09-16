@@ -1,8 +1,8 @@
-import { createRequire } from 'node:module';
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, test } from 'vitest';
+import { afterEach, describe, expect, test } from 'vite-plus/test';
 
 const require = createRequire(import.meta.url);
 const {
@@ -18,22 +18,14 @@ const {
   writeDocument,
   writeDocumentSync,
 } = require('./document-service.cjs') as {
-  DocumentConflictError: new (
-    document: StoredDocument,
-  ) => Error & { document: StoredDocument };
+  DocumentConflictError: new (document: StoredDocument) => Error & { document: StoredDocument };
   createWorkspaceDocument: (request: {
     kind: 'doc' | 'interview' | 'person' | 'report';
     root: string;
     title: string;
   }) => Promise<StoredDocument>;
-  deleteDocument: (request: {
-    path: string;
-    root: string;
-  }) => Promise<{ path: string }>;
-  deleteInterview: (request: {
-    path: string;
-    root: string;
-  }) => Promise<{ path: string }>;
+  deleteDocument: (request: { path: string; root: string }) => Promise<{ path: string }>;
+  deleteInterview: (request: { path: string; root: string }) => Promise<{ path: string }>;
   formatDocumentContent: (request: {
     content: string;
     path: string;
@@ -92,41 +84,38 @@ const createWorkspace = async () => {
 };
 
 afterEach(async () => {
-  await Promise.all(
-    roots.splice(0).map((root) => rm(root, { force: true, recursive: true })),
-  );
+  await Promise.all(roots.splice(0).map((root) => rm(root, { force: true, recursive: true })));
 });
 
 describe('Electron document service', () => {
-  test("a synchronous close flush cannot overtake another window autosave", async () => {
+  test('a synchronous close flush cannot overtake another window autosave', async () => {
     const root = await createWorkspace();
-    const original = readDocumentSync(root, "docs/todo.md");
+    const original = readDocumentSync(root, 'docs/todo.md');
     const pending = writeDocument({
       baseHash: original.hash,
-      content: "# First window\n",
+      content: '# First window\n',
       path: original.path,
       root,
     });
     expect(() =>
       writeDocumentSync({
         baseHash: original.hash,
-        content: "# Closing window\n",
+        content: '# Closing window\n',
         path: original.path,
         root,
       }),
-    ).toThrow("Another save is in progress");
+    ).toThrow('Another save is in progress');
     await pending;
-    expect(readDocumentSync(root, original.path).content).toBe("# First window\n");
+    expect(readDocumentSync(root, original.path).content).toBe('# First window\n');
     expect(() =>
       writeDocumentSync({
         baseHash: original.hash,
-        content: "# Closing window\n",
+        content: '# Closing window\n',
         path: original.path,
         root,
       }),
     ).toThrow(DocumentConflictError);
   });
-
 
   test('lists visible Markdown and saves synchronously', async () => {
     const root = await createWorkspace();
@@ -185,12 +174,8 @@ describe('Electron document service', () => {
       }),
     ]);
 
-    expect(results.filter(({ status }) => status === 'fulfilled')).toHaveLength(
-      1,
-    );
-    expect(results.filter(({ status }) => status === 'rejected')).toHaveLength(
-      1,
-    );
+    expect(results.filter(({ status }) => status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter(({ status }) => status === 'rejected')).toHaveLength(1);
   });
 
   test('restores a deleted packaged-app document without overwriting', async () => {
@@ -198,15 +183,11 @@ describe('Electron document service', () => {
     const path = 'docs/todo.md';
     await rm(join(root, path));
 
-    await expect(
-      restoreDocument({ content: '# Recovered\n', path, root }),
-    ).resolves.toMatchObject({
+    await expect(restoreDocument({ content: '# Recovered\n', path, root })).resolves.toMatchObject({
       content: '# Recovered\n',
       path,
     });
-    await expect(
-      restoreDocument({ content: '# Overwrite\n', path, root }),
-    ).rejects.toMatchObject({
+    await expect(restoreDocument({ content: '# Overwrite\n', path, root })).rejects.toMatchObject({
       code: 'EEXIST',
     });
   });
@@ -223,21 +204,19 @@ describe('Electron document service', () => {
 
   test('completes an interview through the packaged service', async () => {
     const root = await createWorkspace();
-    await expect(
-      deleteInterview({ path: 'interviews/01-candidate.md', root }),
-    ).resolves.toEqual({ path: 'interviews/01-candidate.md' });
+    await expect(deleteInterview({ path: 'interviews/01-candidate.md', root })).resolves.toEqual({
+      path: 'interviews/01-candidate.md',
+    });
   });
 
   test('deletes any unreferenced visible document through the packaged service', async () => {
     const root = await createWorkspace();
-    await expect(
-      deleteDocument({ path: 'docs/todo.md', root }),
-    ).resolves.toEqual({ path: 'docs/todo.md' });
-    await expect(
-      readDocument(root, 'docs/todo.md'),
-    ).rejects.toMatchObject({ code: 'ENOENT' });
-    await expect(
-      deleteDocument({ path: 'reports/_template.md', root }),
-    ).rejects.toThrow('Invalid document path');
+    await expect(deleteDocument({ path: 'docs/todo.md', root })).resolves.toEqual({
+      path: 'docs/todo.md',
+    });
+    await expect(readDocument(root, 'docs/todo.md')).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(deleteDocument({ path: 'reports/_template.md', root })).rejects.toThrow(
+      'Invalid document path',
+    );
   });
 });

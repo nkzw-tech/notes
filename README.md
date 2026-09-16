@@ -39,6 +39,8 @@ pnpm electron -- --workspace=/absolute/path/to/workspace
 
 Notes requires Node.js 23 or newer and pnpm 12.
 
+Vite+ runs development, builds, tests, linting, formatting, and type checks, using the same tooling setup as Codiff. Run `pnpm check` to validate the repository or `pnpm exec vp check --fix` to apply formatting and lint fixes. `pnpm install` configures the staged checks that run before commits.
+
 ```sh
 pnpm install
 pnpm test

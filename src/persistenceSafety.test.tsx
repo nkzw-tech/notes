@@ -1,21 +1,18 @@
 // @vitest-environment jsdom
 
 import {
-  createRef,
-  type RefObject,
-} from 'react';
-import { act } from 'react';
-import { createRoot, type Root } from 'react-dom/client';
-import {
   PersistentMarkdownEditor,
   type MarkdownDocument,
   type MarkdownPersistenceAdapter,
   type PersistentMarkdownEditorHandle,
 } from '@nkzw/mdx-editor/persistence';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { createRef, type RefObject } from 'react';
+import { act } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vite-plus/test';
 
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean })
-  .IS_REACT_ACT_ENVIRONMENT = true;
+(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
+  true;
 
 type TestDocument = MarkdownDocument & {
   path: string;
@@ -41,11 +38,9 @@ const initialDocument: TestDocument = {
   version: 'original',
 };
 
-const mountedRoots: Root[] = [];
+const mountedRoots: Array<Root> = [];
 
-const renderPersistentEditor = async (
-  adapter: MarkdownPersistenceAdapter<TestDocument>,
-) => {
+const renderPersistentEditor = async (adapter: MarkdownPersistenceAdapter<TestDocument>) => {
   const container = document.createElement('div');
   document.body.append(container);
   const root = createRoot(container);

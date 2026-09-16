@@ -1,16 +1,9 @@
+import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { createServer, type Server } from 'node:http';
-import {
-  mkdtemp,
-  mkdir,
-  readFile,
-  readdir,
-  rm,
-  writeFile,
-} from 'node:fs/promises';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, test } from 'vitest';
+import { afterEach, describe, expect, test } from 'vite-plus/test';
 import {
   createDocumentMiddleware,
   createWorkspaceDocument,
@@ -26,8 +19,8 @@ import {
   writeDocument,
 } from './document-service.ts';
 
-const roots: string[] = [];
-const servers: Server[] = [];
+const roots: Array<string> = [];
+const servers: Array<Server> = [];
 
 const createWorkspace = async () => {
   const root = await mkdtemp(join(tmpdir(), 'meetings-documents-'));
@@ -46,10 +39,7 @@ const createWorkspace = async () => {
       '- **Next person number:** 34\n- **Next interview number:** 15\n',
     ),
     writeFile(join(root, 'docs', 'todo.md'), '# ToDo\n'),
-    writeFile(
-      join(root, 'docs', 'behavioral.md'),
-      '# Behavioral\n\nQuestion?\n',
-    ),
+    writeFile(join(root, 'docs', 'behavioral.md'), '# Behavioral\n\nQuestion?\n'),
     writeFile(
       join(root, 'config', 'people.json'),
       JSON.stringify({ peoplePaths: ['people/01-person.md'] }),
@@ -59,10 +49,7 @@ const createWorkspace = async () => {
     writeFile(join(root, 'meetings', '2026-06-23.md'), '# Meetings\n'),
     writeFile(join(root, 'README.md'), '# Hidden\n'),
     writeFile(join(root, 'people', '01-person.md'), '# Person\n'),
-    writeFile(
-      join(root, 'people', '_template.md'),
-      '# Full Name\n\n**Role/team:**  \n',
-    ),
+    writeFile(join(root, 'people', '_template.md'), '# Full Name\n\n**Role/team:**  \n'),
     writeFile(join(root, 'reports', 'report.md'), '# Report\n'),
     writeFile(
       join(root, 'reports', '_template.md'),
@@ -87,9 +74,7 @@ afterEach(async () => {
         }),
     ),
   );
-  await Promise.all(
-    roots.splice(0).map((root) => rm(root, { force: true, recursive: true })),
-  );
+  await Promise.all(roots.splice(0).map((root) => rm(root, { force: true, recursive: true })));
 });
 
 const startDocumentServer = async (root: string) => {
@@ -114,18 +99,10 @@ const startDocumentServer = async (root: string) => {
 describe('document paths', () => {
   test('allows visible Markdown documents and rejects traversal or templates', () => {
     expect(normalizeDocumentPath('docs/todo.md')).toBe('docs/todo.md');
-    expect(normalizeDocumentPath('interviews/01-candidate.md')).toBe(
-      'interviews/01-candidate.md',
-    );
-    expect(normalizeDocumentPath('meetings/2026-06-23.md')).toBe(
-      'meetings/2026-06-23.md',
-    );
-    expect(normalizeDocumentPath('people/01-person.md')).toBe(
-      'people/01-person.md',
-    );
-    expect(normalizeDocumentPath('reports/report.md')).toBe(
-      'reports/report.md',
-    );
+    expect(normalizeDocumentPath('interviews/01-candidate.md')).toBe('interviews/01-candidate.md');
+    expect(normalizeDocumentPath('meetings/2026-06-23.md')).toBe('meetings/2026-06-23.md');
+    expect(normalizeDocumentPath('people/01-person.md')).toBe('people/01-person.md');
+    expect(normalizeDocumentPath('reports/report.md')).toBe('reports/report.md');
     expect(normalizeDocumentPath('../secret.md')).toBeNull();
     expect(normalizeDocumentPath('/tmp/secret.md')).toBeNull();
     expect(normalizeDocumentPath('people/_template.md')).toBeNull();
@@ -136,9 +113,7 @@ describe('document paths', () => {
 
   test('never resolves outside the workspace', async () => {
     const root = await createWorkspace();
-    expect(() => resolveDocumentPath(root, '../../secret.md')).toThrow(
-      'Invalid document path',
-    );
+    expect(() => resolveDocumentPath(root, '../../secret.md')).toThrow('Invalid document path');
   });
 });
 
@@ -168,9 +143,7 @@ describe('document storage', () => {
 
     expect(updated.content).toContain('Test autosave');
     expect(updated.hash).not.toBe(current.hash);
-    expect((await readdir(root)).some((name) => name.endsWith('.tmp'))).toBe(
-      false,
-    );
+    expect((await readdir(root)).some((name) => name.endsWith('.tmp'))).toBe(false);
   });
 
   test('returns the disk document on an optimistic concurrency conflict', async () => {
@@ -212,12 +185,8 @@ describe('document storage', () => {
       }),
     ]);
 
-    expect(results.filter(({ status }) => status === 'fulfilled')).toHaveLength(
-      1,
-    );
-    expect(results.filter(({ status }) => status === 'rejected')).toHaveLength(
-      1,
-    );
+    expect(results.filter(({ status }) => status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter(({ status }) => status === 'rejected')).toHaveLength(1);
   });
 
   test('formats Markdown without writing it to disk', async () => {
@@ -239,9 +208,7 @@ describe('document storage', () => {
     const root = await createWorkspace();
     const path = 'docs/todo.md';
     await rm(join(root, path));
-    await expect(
-      restoreDocument({ content: '# Recovered\n', path, root }),
-    ).resolves.toMatchObject({
+    await expect(restoreDocument({ content: '# Recovered\n', path, root })).resolves.toMatchObject({
       content: '# Recovered\n',
       path,
     });
@@ -315,40 +282,35 @@ describe('document storage', () => {
 
   test('deletes only unreferenced interview documents', async () => {
     const root = await createWorkspace();
-    await expect(
-      deleteInterview({ path: 'interviews/01-candidate.md', root }),
-    ).resolves.toEqual({ path: 'interviews/01-candidate.md' });
-    await expect(
-      readDocument(root, 'interviews/01-candidate.md'),
-    ).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(deleteInterview({ path: 'interviews/01-candidate.md', root })).resolves.toEqual({
+      path: 'interviews/01-candidate.md',
+    });
+    await expect(readDocument(root, 'interviews/01-candidate.md')).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
 
-    await writeFile(
-      join(root, 'interviews', '02-linked.md'),
-      '# 2. Linked Candidate\n',
-    );
+    await writeFile(join(root, 'interviews', '02-linked.md'), '# 2. Linked Candidate\n');
     await writeFile(
       join(root, 'docs', 'references.md'),
       '[Candidate](../interviews/02-linked.md)\n',
     );
-    await expect(
-      deleteInterview({ path: 'interviews/02-linked.md', root }),
-    ).rejects.toThrow('docs/references.md');
-    await expect(
-      deleteInterview({ path: 'docs/todo.md', root }),
-    ).rejects.toThrow('Only interview documents');
+    await expect(deleteInterview({ path: 'interviews/02-linked.md', root })).rejects.toThrow(
+      'docs/references.md',
+    );
+    await expect(deleteInterview({ path: 'docs/todo.md', root })).rejects.toThrow(
+      'Only interview documents',
+    );
   });
 
   test('deletes any unreferenced visible document', async () => {
     const root = await createWorkspace();
-    await expect(
-      deleteDocument({ path: 'reports/report.md', root }),
-    ).resolves.toEqual({ path: 'reports/report.md' });
-    await expect(
-      readDocument(root, 'reports/report.md'),
-    ).rejects.toMatchObject({ code: 'ENOENT' });
-    await expect(
-      deleteDocument({ path: 'reports/_template.md', root }),
-    ).rejects.toThrow('Invalid document path');
+    await expect(deleteDocument({ path: 'reports/report.md', root })).resolves.toEqual({
+      path: 'reports/report.md',
+    });
+    await expect(readDocument(root, 'reports/report.md')).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(deleteDocument({ path: 'reports/_template.md', root })).rejects.toThrow(
+      'Invalid document path',
+    );
   });
 });
 
@@ -360,11 +322,9 @@ describe('document middleware', () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
-      documents: expect.arrayContaining([
-        expect.objectContaining({ path: 'people/01-person.md' }),
-      ]),
-      peoplePaths: ['people/01-person.md'],
+      documents: expect.arrayContaining([expect.objectContaining({ path: 'people/01-person.md' })]),
       metadataError: null,
+      peoplePaths: ['people/01-person.md'],
     });
   });
 
@@ -376,9 +336,7 @@ describe('document middleware', () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
-      documents: expect.arrayContaining([
-        expect.objectContaining({ path: 'docs/todo.md' }),
-      ]),
+      documents: expect.arrayContaining([expect.objectContaining({ path: 'docs/todo.md' })]),
       metadataError: expect.stringContaining('config/people.json'),
       peoplePaths: [],
     });

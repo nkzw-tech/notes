@@ -1,15 +1,15 @@
-import type { MeetingDocument } from "./content.ts";
+import type { MeetingDocument } from './content.ts';
 
 const normalize = (value: string) => value.trim().toLocaleLowerCase();
 
-const groupOrder: Record<MeetingDocument["group"], number> = {
-  Docs: 0,
-  Reports: 1,
-  Interviews: 2,
-  "Meetings Overview": 3,
-  "Upcoming Meetings": 4,
-  People: 5,
+const groupOrder: Record<MeetingDocument['group'], number> = {
   Archive: 6,
+  Docs: 0,
+  Interviews: 2,
+  'Meetings Overview': 3,
+  People: 5,
+  Reports: 1,
+  'Upcoming Meetings': 4,
 };
 
 const fuzzyScore = (value: string, query: string) => {
@@ -48,7 +48,7 @@ const fuzzyScore = (value: string, query: string) => {
 };
 
 export const getPaletteDocumentTitle = (document: MeetingDocument) =>
-  document.title.replace(/^\d+\.\s*/, "");
+  document.title.replace(/^\d+\.\s*/, '');
 
 export const filterPaletteDocuments = (
   documents: ReadonlyArray<MeetingDocument>,
@@ -70,7 +70,7 @@ export const filterPaletteDocuments = (
     .map((document, index) => {
       const titleScore = fuzzyScore(getPaletteDocumentTitle(document), normalizedQuery);
       const metadataScore = fuzzyScore(
-        `${document.group} ${document.path} ${document.cue ?? ""}`,
+        `${document.group} ${document.path} ${document.cue ?? ''}`,
         normalizedQuery,
       );
       const score = Math.min(

@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from 'vitest';
+import { describe, expect, test, vi } from 'vite-plus/test';
 import {
   clearRecoveryDraft,
   readRecoveryDraft,
@@ -17,43 +17,36 @@ const createStorage = () => {
 };
 
 describe('single-draft crash recovery', () => {
-  test("windows retain independent drafts even while editing the same document", () => {
+  test('windows retain independent drafts even while editing the same document', () => {
     const storage = createStorage();
-    const fakeWindow = { meetings: { recoveryDraftKey: "window-one" } };
-    vi.stubGlobal("window", fakeWindow);
+    const fakeWindow = { meetings: { recoveryDraftKey: 'window-one' } };
+    vi.stubGlobal('window', fakeWindow);
     try {
       writeRecoveryDraft(
-        { baseHash: "base", content: "First draft", path: "docs/todo.md" },
+        { baseHash: 'base', content: 'First draft', path: 'docs/todo.md' },
         storage,
       );
-      fakeWindow.meetings.recoveryDraftKey = "window-two";
+      fakeWindow.meetings.recoveryDraftKey = 'window-two';
       expect(readRecoveryDraft(storage)).toBeNull();
       writeRecoveryDraft(
-        { baseHash: "base", content: "Second draft", path: "docs/todo.md" },
+        { baseHash: 'base', content: 'Second draft', path: 'docs/todo.md' },
         storage,
       );
-      clearRecoveryDraft("docs/todo.md", storage);
-      fakeWindow.meetings.recoveryDraftKey = "window-one";
-      expect(readRecoveryDraft(storage)?.content).toBe("First draft");
+      clearRecoveryDraft('docs/todo.md', storage);
+      fakeWindow.meetings.recoveryDraftKey = 'window-one';
+      expect(readRecoveryDraft(storage)?.content).toBe('First draft');
     } finally {
       vi.unstubAllGlobals();
     }
   });
 
-
   test('keeps only the latest unsaved text and clears it after saving', () => {
     vi.spyOn(Date, 'now').mockReturnValue(123);
     const storage = createStorage();
     expect(
-      writeRecoveryDraft(
-        { baseHash: 'base', content: 'First', path: 'docs/todo.md' },
-        storage,
-      ),
+      writeRecoveryDraft({ baseHash: 'base', content: 'First', path: 'docs/todo.md' }, storage),
     ).toBe(true);
-    writeRecoveryDraft(
-      { baseHash: 'base', content: 'Newest', path: 'docs/todo.md' },
-      storage,
-    );
+    writeRecoveryDraft({ baseHash: 'base', content: 'Newest', path: 'docs/todo.md' }, storage);
 
     expect(readRecoveryDraft(storage)).toEqual({
       baseHash: 'base',
@@ -67,10 +60,7 @@ describe('single-draft crash recovery', () => {
 
   test('does not clear another document draft', () => {
     const storage = createStorage();
-    writeRecoveryDraft(
-      { baseHash: 'base', content: 'Keep me', path: 'people/one.md' },
-      storage,
-    );
+    writeRecoveryDraft({ baseHash: 'base', content: 'Keep me', path: 'people/one.md' }, storage);
     clearRecoveryDraft('docs/todo.md', storage);
     expect(readRecoveryDraft(storage)?.content).toBe('Keep me');
   });
@@ -87,10 +77,7 @@ describe('single-draft crash recovery', () => {
       ),
     ).toBe(false);
     expect(
-      writeRecoveryDraft(
-        { baseHash: 'base', content: 'Text', path: 'docs/todo.md' },
-        null,
-      ),
+      writeRecoveryDraft({ baseHash: 'base', content: 'Text', path: 'docs/todo.md' }, null),
     ).toBe(false);
     expect(readRecoveryDraft(null)).toBeNull();
   });

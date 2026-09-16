@@ -4,12 +4,12 @@ import {
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
-} from "react";
-import type { MeetingDocument } from "./content.ts";
-import type { CreateDocumentKind, CreateDocumentRequest } from "./documentApi.ts";
-import { filterPaletteDocuments, getPaletteDocumentTitle } from "./documentPalette.ts";
+} from 'react';
+import type { MeetingDocument } from './content.ts';
+import type { CreateDocumentKind, CreateDocumentRequest } from './documentApi.ts';
+import { filterPaletteDocuments, getPaletteDocumentTitle } from './documentPalette.ts';
 
-type PaletteMode = "browse" | "complete-interview" | "delete-document" | "kind" | "name";
+type PaletteMode = 'browse' | 'complete-interview' | 'delete-document' | 'kind' | 'name';
 
 const documentKinds: ReadonlyArray<{
   description: string;
@@ -18,33 +18,33 @@ const documentKinds: ReadonlyArray<{
   marker: string;
 }> = [
   {
-    description: "Create a Markdown file in Docs",
-    kind: "doc",
-    label: "Regular doc",
-    marker: "D",
+    description: 'Create a Markdown file in Docs',
+    kind: 'doc',
+    label: 'Regular doc',
+    marker: 'D',
   },
   {
-    description: "Use the next interview number and append the questionnaire",
-    kind: "interview",
-    label: "Interview",
-    marker: "I",
+    description: 'Use the next interview number and append the questionnaire',
+    kind: 'interview',
+    label: 'Interview',
+    marker: 'I',
   },
   {
-    description: "Create an unnumbered direct-report profile",
-    kind: "report",
-    label: "Report",
-    marker: "R",
+    description: 'Create an unnumbered direct-report profile',
+    kind: 'report',
+    label: 'Report',
+    marker: 'R',
   },
   {
-    description: "Use the next person number and add to Upcoming Meetings",
-    kind: "person",
-    label: "Person",
-    marker: "P",
+    description: 'Use the next person number and add to Upcoming Meetings',
+    kind: 'person',
+    label: 'Person',
+    marker: 'P',
   },
 ];
 
 const getNamePlaceholder = (kind: CreateDocumentKind | null) =>
-  kind === "doc" ? "Document title…" : kind === "interview" ? "Candidate name…" : "Full name…";
+  kind === 'doc' ? 'Document title…' : kind === 'interview' ? 'Candidate name…' : 'Full name…';
 
 export function DocumentPalette({
   activeDocument,
@@ -68,24 +68,25 @@ export function DocumentPalette({
   const [creationKind, setCreationKind] = useState<CreateDocumentKind | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
-  const [mode, setMode] = useState<PaletteMode>("browse");
-  const [query, setQuery] = useState("");
+  const [mode, setMode] = useState<PaletteMode>('browse');
+  const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const itemRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const filteredDocuments = filterPaletteDocuments(documents, query);
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const showCreateAction =
     !filesOnly &&
-    mode === "browse" && (!normalizedQuery || "create document new".includes(normalizedQuery));
+    mode === 'browse' &&
+    (!normalizedQuery || 'create document new'.includes(normalizedQuery));
   const destructiveMode =
-    activeDocument.group === "Interviews" ? "complete-interview" : "delete-document";
+    activeDocument.group === 'Interviews' ? 'complete-interview' : 'delete-document';
   const destructiveSearchText =
-    destructiveMode === "complete-interview"
-      ? "complete interview delete"
-      : "delete document remove";
+    destructiveMode === 'complete-interview'
+      ? 'complete interview delete'
+      : 'delete document remove';
   const showDestructiveAction =
     !filesOnly &&
-    mode === "browse" &&
+    mode === 'browse' &&
     (!normalizedQuery || destructiveSearchText.includes(normalizedQuery));
   const browseActionCount = Number(showCreateAction) + Number(showDestructiveAction);
   const filteredKinds = documentKinds.filter(
@@ -93,11 +94,11 @@ export function DocumentPalette({
       !normalizedQuery || `${label} ${description}`.toLocaleLowerCase().includes(normalizedQuery),
   );
   const itemCount =
-    mode === "browse"
+    mode === 'browse'
       ? filteredDocuments.length + browseActionCount
-      : mode === "kind"
+      : mode === 'kind'
         ? filteredKinds.length
-        : mode === "name" && !query.trim()
+        : mode === 'name' && !query.trim()
           ? 0
           : 1;
   const clampedIndex = itemCount === 0 ? -1 : Math.min(selectedIndex, itemCount - 1);
@@ -106,7 +107,7 @@ export function DocumentPalette({
     itemRefs.current = [];
     setError(null);
     setMode(nextMode);
-    setQuery("");
+    setQuery('');
     setSelectedIndex(0);
   }, []);
 
@@ -121,7 +122,7 @@ export function DocumentPalette({
   const chooseKind = useCallback(
     (kind: CreateDocumentKind) => {
       setCreationKind(kind);
-      resetStep("name");
+      resetStep('name');
     },
     [resetStep],
   );
@@ -137,13 +138,13 @@ export function DocumentPalette({
       await onCreate({ kind: creationKind, title });
       onClose();
     } catch (createError) {
-      setError(createError instanceof Error ? createError.message : "Could not create document.");
+      setError(createError instanceof Error ? createError.message : 'Could not create document.');
       setIsCreating(false);
     }
   }, [creationKind, isCreating, onClose, onCreate, query]);
 
   const completeInterviewAndClose = useCallback(async () => {
-    if (activeDocument.group !== "Interviews" || isCreating) {
+    if (activeDocument.group !== 'Interviews' || isCreating) {
       return;
     }
     setError(null);
@@ -155,7 +156,7 @@ export function DocumentPalette({
       setError(
         completionError instanceof Error
           ? completionError.message
-          : "Could not complete interview.",
+          : 'Could not complete interview.',
       );
       setIsCreating(false);
     }
@@ -172,7 +173,7 @@ export function DocumentPalette({
       onClose();
     } catch (deletionError) {
       setError(
-        deletionError instanceof Error ? deletionError.message : "Could not delete document.",
+        deletionError instanceof Error ? deletionError.message : 'Could not delete document.',
       );
       setIsCreating(false);
     }
@@ -180,9 +181,9 @@ export function DocumentPalette({
 
   const activateIndex = useCallback(
     (index: number) => {
-      if (mode === "browse") {
+      if (mode === 'browse') {
         if (showCreateAction && index === 0) {
-          resetStep("kind");
+          resetStep('kind');
           return;
         }
         const destructiveIndex = showCreateAction ? 1 : 0;
@@ -196,18 +197,18 @@ export function DocumentPalette({
         }
         return;
       }
-      if (mode === "kind") {
+      if (mode === 'kind') {
         const documentKind = filteredKinds[index];
         if (documentKind) {
           chooseKind(documentKind.kind);
         }
         return;
       }
-      if (mode === "name" && index === 0) {
+      if (mode === 'name' && index === 0) {
         void createAndClose();
-      } else if (mode === "complete-interview" && index === 0) {
+      } else if (mode === 'complete-interview' && index === 0) {
         void completeInterviewAndClose();
-      } else if (mode === "delete-document" && index === 0) {
+      } else if (mode === 'delete-document' && index === 0) {
         void deleteDocumentAndClose();
       }
     },
@@ -229,29 +230,29 @@ export function DocumentPalette({
   );
 
   const scrollIndexIntoView = useCallback((index: number) => {
-    itemRefs.current[index]?.scrollIntoView({ block: "nearest" });
+    itemRefs.current[index]?.scrollIntoView({ block: 'nearest' });
   }, []);
 
   const handleKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLInputElement>) => {
-      if (event.key === "Escape") {
+      if (event.key === 'Escape') {
         event.preventDefault();
         onClose();
         return;
       }
 
-      if (event.key === "Backspace" && query === "" && mode !== "browse") {
+      if (event.key === 'Backspace' && query === '' && mode !== 'browse') {
         event.preventDefault();
-        if (mode === "name") {
+        if (mode === 'name') {
           setCreationKind(null);
-          resetStep("kind");
+          resetStep('kind');
         } else {
-          resetStep("browse");
+          resetStep('browse');
         }
         return;
       }
 
-      if (event.key === "ArrowDown") {
+      if (event.key === 'ArrowDown') {
         event.preventDefault();
         setSelectedIndex((current) => {
           const next = current + 1 >= itemCount ? 0 : current + 1;
@@ -261,7 +262,7 @@ export function DocumentPalette({
         return;
       }
 
-      if (event.key === "ArrowUp") {
+      if (event.key === 'ArrowUp') {
         event.preventDefault();
         setSelectedIndex((current) => {
           const next = current - 1 < 0 ? Math.max(itemCount - 1, 0) : current - 1;
@@ -271,7 +272,7 @@ export function DocumentPalette({
         return;
       }
 
-      if (event.key === "Enter" && clampedIndex >= 0) {
+      if (event.key === 'Enter' && clampedIndex >= 0) {
         event.preventDefault();
         activateIndex(clampedIndex);
       }
@@ -289,13 +290,13 @@ export function DocumentPalette({
   );
 
   const placeholder =
-    mode === "browse"
-      ? "Search people and documents…"
-      : mode === "kind"
-        ? "Choose a document type…"
-        : mode === "name"
+    mode === 'browse'
+      ? 'Search people and documents…'
+      : mode === 'kind'
+        ? 'Choose a document type…'
+        : mode === 'name'
           ? getNamePlaceholder(creationKind)
-          : mode === "complete-interview"
+          : mode === 'complete-interview'
             ? `Complete ${getPaletteDocumentTitle(activeDocument)}?`
             : `Delete ${getPaletteDocumentTitle(activeDocument)}?`;
 
@@ -304,7 +305,7 @@ export function DocumentPalette({
       <section aria-label="Quick open" aria-modal="true" className="document-palette" role="dialog">
         <input
           aria-controls="document-palette-results"
-          aria-label={placeholder.replace("…", "")}
+          aria-label={placeholder.replace('…', '')}
           autoComplete="off"
           autoFocus
           className="document-palette-input"
@@ -316,18 +317,18 @@ export function DocumentPalette({
           }}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
-          readOnly={mode === "complete-interview" || mode === "delete-document"}
+          readOnly={mode === 'complete-interview' || mode === 'delete-document'}
           spellCheck={false}
           type="text"
           value={query}
         />
         <div className="document-palette-list" id="document-palette-results">
-          {mode === "browse" ? (
+          {mode === 'browse' ? (
             <>
               {showCreateAction ? (
                 <button
-                  className={`document-palette-item document-palette-create${clampedIndex === 0 ? " selected" : ""}`}
-                  onClick={() => resetStep("kind")}
+                  className={`document-palette-item document-palette-create${clampedIndex === 0 ? ' selected' : ''}`}
+                  onClick={() => resetStep('kind')}
                   onPointerEnter={() => setSelectedIndex(0)}
                   ref={(element) => {
                     itemRefs.current[0] = element;
@@ -344,7 +345,7 @@ export function DocumentPalette({
               ) : null}
               {showDestructiveAction ? (
                 <button
-                  className={`document-palette-item document-palette-danger${clampedIndex === (showCreateAction ? 1 : 0) ? " selected" : ""}`}
+                  className={`document-palette-item document-palette-danger${clampedIndex === (showCreateAction ? 1 : 0) ? ' selected' : ''}`}
                   onClick={() => resetStep(destructiveMode)}
                   onPointerEnter={() => setSelectedIndex(showCreateAction ? 1 : 0)}
                   ref={(element) => {
@@ -355,14 +356,14 @@ export function DocumentPalette({
                   <span className="document-palette-marker">×</span>
                   <span className="document-palette-copy">
                     <strong>
-                      {destructiveMode === "complete-interview"
-                        ? "Complete Interview"
-                        : "Delete document…"}
+                      {destructiveMode === 'complete-interview'
+                        ? 'Complete Interview'
+                        : 'Delete document…'}
                     </strong>
                     <span>Permanently delete {activeDocument.path}</span>
                   </span>
                   <span className="document-palette-group">
-                    {destructiveMode === "complete-interview" ? "Interview" : "Delete"}
+                    {destructiveMode === 'complete-interview' ? 'Interview' : 'Delete'}
                   </span>
                 </button>
               ) : null}
@@ -370,7 +371,7 @@ export function DocumentPalette({
                 const index = documentIndex + browseActionCount;
                 return (
                   <button
-                    className={`document-palette-item${index === clampedIndex ? " selected" : ""}`}
+                    className={`document-palette-item${index === clampedIndex ? ' selected' : ''}`}
                     key={document.id}
                     onClick={() => navigateAndClose(document)}
                     onPointerEnter={() => setSelectedIndex(index)}
@@ -380,7 +381,7 @@ export function DocumentPalette({
                     type="button"
                   >
                     <span className="document-palette-marker">
-                      {document.number === null ? "•" : String(document.number).padStart(2, "0")}
+                      {document.number === null ? '•' : String(document.number).padStart(2, '0')}
                     </span>
                     <span className="document-palette-copy">
                       <strong>{getPaletteDocumentTitle(document)}</strong>
@@ -394,11 +395,11 @@ export function DocumentPalette({
                 <div className="document-palette-empty">No matching documents</div>
               ) : null}
             </>
-          ) : mode === "kind" ? (
+          ) : mode === 'kind' ? (
             <>
               {filteredKinds.map((documentKind, index) => (
                 <button
-                  className={`document-palette-item${index === clampedIndex ? " selected" : ""}`}
+                  className={`document-palette-item${index === clampedIndex ? ' selected' : ''}`}
                   key={documentKind.kind}
                   onClick={() => chooseKind(documentKind.kind)}
                   onPointerEnter={() => setSelectedIndex(index)}
@@ -419,7 +420,7 @@ export function DocumentPalette({
                 <div className="document-palette-empty">No matching document types</div>
               ) : null}
             </>
-          ) : mode === "name" ? (
+          ) : mode === 'name' ? (
             query.trim() ? (
               <button
                 className="document-palette-item document-palette-create selected"
@@ -432,8 +433,10 @@ export function DocumentPalette({
               >
                 <span className="document-palette-marker">+</span>
                 <span className="document-palette-copy">
-                  <strong>{isCreating ? "Creating…" : `Create “${query.trim()}”`}</strong>
-                  <span>{documentKinds.find(({ kind }) => kind === creationKind)?.description}</span>
+                  <strong>{isCreating ? 'Creating…' : `Create “${query.trim()}”`}</strong>
+                  <span>
+                    {documentKinds.find(({ kind }) => kind === creationKind)?.description}
+                  </span>
                 </span>
                 <span className="document-palette-group">Create</span>
               </button>
@@ -447,7 +450,7 @@ export function DocumentPalette({
               className="document-palette-item document-palette-danger selected"
               disabled={isCreating}
               onClick={() =>
-                void (mode === "complete-interview"
+                void (mode === 'complete-interview'
                   ? completeInterviewAndClose()
                   : deleteDocumentAndClose())
               }
@@ -459,13 +462,13 @@ export function DocumentPalette({
               <span className="document-palette-marker">×</span>
               <span className="document-palette-copy">
                 <strong>
-                  {mode === "complete-interview"
+                  {mode === 'complete-interview'
                     ? isCreating
-                      ? "Completing…"
-                      : "Complete Interview"
+                      ? 'Completing…'
+                      : 'Complete Interview'
                     : isCreating
-                      ? "Deleting…"
-                      : "Delete document"}
+                      ? 'Deleting…'
+                      : 'Delete document'}
                 </strong>
                 <span>Permanently delete {activeDocument.path}</span>
               </span>

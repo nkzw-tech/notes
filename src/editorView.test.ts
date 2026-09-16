@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'vite-plus/test';
 import {
   beginEditorVisualSwap,
   captureEditorView,
@@ -14,8 +14,7 @@ describe('editor view restoration', () => {
     const contentEditable = document.createElement('div');
     contentEditable.contentEditable = 'true';
     contentEditable.tabIndex = 0;
-    contentEditable.innerHTML =
-      '<p>First paragraph</p><p>Second paragraph</p>';
+    contentEditable.innerHTML = '<p>First paragraph</p><p>Second paragraph</p>';
     scrollContainer.append(contentEditable);
     document.body.append(scrollContainer);
 
@@ -29,8 +28,7 @@ describe('editor view restoration', () => {
     const snapshot = captureEditorView(contentEditable, scrollContainer);
     expect(snapshot).not.toBeNull();
 
-    contentEditable.innerHTML =
-      '<p>First paragraph</p><p>Second paragraph</p>';
+    contentEditable.innerHTML = '<p>First paragraph</p><p>Second paragraph</p>';
     scrollContainer.scrollTop = 0;
     restoreEditorView(contentEditable, scrollContainer, snapshot!);
 
@@ -53,12 +51,7 @@ describe('editor view restoration', () => {
     const lastBlankLine = contentEditable.lastChild;
     expect(lastBlankLine).toBeTruthy();
     contentEditable.focus();
-    getSelection()?.setBaseAndExtent(
-      lastBlankLine!,
-      0,
-      lastBlankLine!,
-      0,
-    );
+    getSelection()?.setBaseAndExtent(lastBlankLine!, 0, lastBlankLine!, 0);
 
     const snapshot = captureEditorView(contentEditable, scrollContainer);
     expect(snapshot).not.toBeNull();
@@ -116,9 +109,7 @@ describe('editor view restoration', () => {
 
 describe('offset mapping', () => {
   test('maps offsets after deleted content to the edit boundary', () => {
-    expect(mapOffsetThroughEdits('Paragraph\n\n\n\n\n', 'Paragraph', 13)).toBe(
-      9,
-    );
+    expect(mapOffsetThroughEdits('Paragraph\n\n\n\n\n', 'Paragraph', 13)).toBe(9);
   });
 
   test('preserves offsets in unchanged content after a deletion', () => {

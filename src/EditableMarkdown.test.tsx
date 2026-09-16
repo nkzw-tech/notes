@@ -2,7 +2,7 @@
 
 import { act, createRef } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vite-plus/test';
 import { createMeetingDocument } from './content.ts';
 import { RECOVERY_DRAFT_KEY } from './draftRecovery.ts';
 
@@ -19,11 +19,10 @@ vi.mock('./documentApi.ts', async (importOriginal) => ({
 
 import EditableMarkdown, { type EditableMarkdownHandle } from './EditableMarkdown.tsx';
 
-(
-  globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
-).IS_REACT_ACT_ENVIRONMENT = true;
+(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
+  true;
 
-const roots: Root[] = [];
+const roots: Array<Root> = [];
 const storageValues = new Map<string, string>();
 const storage = {
   clear: () => storageValues.clear(),
@@ -67,12 +66,15 @@ describe('EditableMarkdown recovery integration', () => {
       mtimeMs: 1,
       path: 'docs/example.md',
     };
-    window.localStorage.setItem(RECOVERY_DRAFT_KEY, JSON.stringify({
-      baseHash: diskDocument.hash,
-      content: 'Text from the interrupted session',
-      path: diskDocument.path,
-      updatedAt: 123,
-    }));
+    window.localStorage.setItem(
+      RECOVERY_DRAFT_KEY,
+      JSON.stringify({
+        baseHash: diskDocument.hash,
+        content: 'Text from the interrupted session',
+        path: diskDocument.path,
+        updatedAt: 123,
+      }),
+    );
     api.saveDocument.mockImplementation(async ({ content }) => ({
       ...diskDocument,
       content,
@@ -82,15 +84,19 @@ describe('EditableMarkdown recovery integration', () => {
     document.body.append(container);
     const root = createRoot(container);
     roots.push(root);
-    await act(async () => root.render(<EditableMarkdown
-      ref={ref}
-      document={createMeetingDocument(diskDocument, new Set())}
-      onLocalChange={vi.fn()}
-      onNavigate={vi.fn()}
-      onStatusChange={vi.fn()}
-      onStoredChange={vi.fn()}
-      resolveLink={() => null}
-    />));
+    await act(async () =>
+      root.render(
+        <EditableMarkdown
+          document={createMeetingDocument(diskDocument, new Set())}
+          onLocalChange={vi.fn()}
+          onNavigate={vi.fn()}
+          onStatusChange={vi.fn()}
+          onStoredChange={vi.fn()}
+          ref={ref}
+          resolveLink={() => null}
+        />,
+      ),
+    );
     expect(api.saveDocument).toHaveBeenCalledExactlyOnceWith({
       baseHash: 'disk-hash',
       content: 'Text from the interrupted session\n',
@@ -98,7 +104,9 @@ describe('EditableMarkdown recovery integration', () => {
       path: diskDocument.path,
     });
     expect(container.querySelector('[data-kind="conflict"]')).toBeNull();
-    expect(container.querySelector('.mdx-editor-content')?.textContent).toBe('Text from the interrupted session');
+    expect(container.querySelector('.mdx-editor-content')?.textContent).toBe(
+      'Text from the interrupted session',
+    );
     expect(ref.current!.hasUnsavedChanges()).toBe(false);
     expect(window.localStorage.getItem(RECOVERY_DRAFT_KEY)).toBeNull();
   });
@@ -135,25 +143,21 @@ describe('EditableMarkdown recovery integration', () => {
     await act(async () => {
       root.render(
         <EditableMarkdown
-          ref={ref}
           document={createMeetingDocument(diskDocument, new Set())}
           onLocalChange={vi.fn()}
           onNavigate={vi.fn()}
           onStatusChange={vi.fn()}
           onStoredChange={vi.fn()}
+          ref={ref}
           resolveLink={() => null}
         />,
       );
     });
 
-    expect(container.textContent).toContain(
-      'Unsaved text from the previous session was recovered',
+    expect(container.textContent).toContain('Unsaved text from the previous session was recovered');
+    expect(container.querySelector('.mdx-editor-content')?.getAttribute('contenteditable')).toBe(
+      'false',
     );
-    expect(
-      container
-        .querySelector('.mdx-editor-content')
-        ?.getAttribute('contenteditable'),
-    ).toBe('false');
 
     const closeEvent = new Event('beforeunload', { cancelable: true });
     window.dispatchEvent(closeEvent);
@@ -161,7 +165,11 @@ describe('EditableMarkdown recovery integration', () => {
     await expect(ref.current!.flush()).resolves.toBe(false);
     expect(ref.current!.hasUnsavedChanges()).toBe(true);
     await act(async () => {
-      ref.current!.applyExternalChange({ ...diskDocument, content: 'Another window saved\n', hash: 'peer-hash' });
+      ref.current!.applyExternalChange({
+        ...diskDocument,
+        content: 'Another window saved\n',
+        hash: 'peer-hash',
+      });
     });
     expect(window.localStorage.getItem(RECOVERY_DRAFT_KEY)).toContain('Recovered unsaved text');
 

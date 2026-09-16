@@ -1,8 +1,8 @@
 // @ts-check
 
-const { randomUUID } = require("node:crypto");
-const { dirname, join, resolve } = require("node:path");
-const { pathToFileURL } = require("node:url");
+const { randomUUID } = require('node:crypto');
+const { dirname, join, resolve } = require('node:path');
+const { pathToFileURL } = require('node:url');
 const {
   app,
   BrowserWindow,
@@ -13,8 +13,8 @@ const {
   screen,
   shell,
   systemPreferences,
-} = require("electron");
-const squirrelStartup = require("electron-squirrel-startup");
+} = require('electron');
+const squirrelStartup = require('electron-squirrel-startup');
 const {
   createWorkspaceDocument,
   deleteDocument,
@@ -23,27 +23,27 @@ const {
   isWorkspaceRoot,
   normalizeDocumentPath,
   restoreDocument,
-} = require("./document-service.cjs");
+} = require('./document-service.cjs');
 const {
   readWindowState,
   validateWindowStateOnScreen,
   writeWindowState,
-} = require("./window-state.cjs");
+} = require('./window-state.cjs');
 const {
   initializeWorkspace,
   readWorkspacePath,
   writeWorkspacePath,
-} = require("./workspace-config.cjs");
+} = require('./workspace-config.cjs');
 
-const { createWorkspaceSession } = require("./workspace-session.cjs");
-const { readOpenWindows, writeOpenWindows } = require("./open-windows.cjs");
-const { normalizeWindowLayout } = require("./window-layout.cjs");
+const { createWorkspaceSession } = require('./workspace-session.cjs');
+const { readOpenWindows, writeOpenWindows } = require('./open-windows.cjs');
+const { normalizeWindowLayout } = require('./window-layout.cjs');
 
 const appRoot = dirname(__dirname);
 const closingWindowIds = new Set();
 const windowSessions = new Map();
 const workspaceSessions = new Map();
-let workspaceRoot = "";
+let workspaceRoot = '';
 let explicitWorkspaceRoot = null;
 let quitSessions = null;
 let pendingWindowState = null;
@@ -51,7 +51,7 @@ let colorPreferencesSubscription = null;
 
 const getSystemAccent = () => {
   try {
-    const color = systemPreferences.getAccentColor().replace(/^#/, "");
+    const color = systemPreferences.getAccentColor().replace(/^#/, '');
     return /^(?:[\da-f]{6}|[\da-f]{8})$/i.test(color) ? `#${color}` : null;
   } catch {
     return null;
@@ -62,7 +62,7 @@ const updateSystemAccent = () => {
   const color = getSystemAccent();
   for (const window of BrowserWindow.getAllWindows()) {
     if (!window.isDestroyed() && !window.webContents.isDestroyed()) {
-      window.webContents.send("meetings:system-accent-changed", color);
+      window.webContents.send('meetings:system-accent-changed', color);
     }
   }
 };
@@ -73,9 +73,9 @@ const persistOpenWindows = () => {
     pendingWindowState = null;
   }
   try {
-    writeOpenWindows([...(quitSessions ?? windowSessions).values()], app.getPath("userData"));
+    writeOpenWindows([...(quitSessions ?? windowSessions).values()], app.getPath('userData'));
   } catch (error) {
-    console.error("Failed to remember Notes windows:", error);
+    console.error('Failed to remember Notes windows:', error);
   }
 };
 
@@ -115,17 +115,17 @@ const getWorkspaceSession = (root) => {
 const sessionForSender = (sender) => {
   const session = windowSessions.get(sender.id);
   if (!session) {
-    throw new Error("This Notes window is no longer available.");
+    throw new Error('This Notes window is no longer available.');
   }
   return getWorkspaceSession(session.workspaceRoot);
 };
 const resolveWorkspaceRoot = () => {
-  const workspaceArgumentIndex = process.argv.indexOf("--workspace");
+  const workspaceArgumentIndex = process.argv.indexOf('--workspace');
   const workspaceArgument =
     workspaceArgumentIndex >= 0 ? process.argv[workspaceArgumentIndex + 1] : undefined;
   const inlineWorkspaceArgument = process.argv
-    .find((argument) => argument.startsWith("--workspace="))
-    ?.slice("--workspace=".length);
+    .find((argument) => argument.startsWith('--workspace='))
+    ?.slice('--workspace='.length);
   const explicitCandidates = [
     process.env.NOTES_WORKSPACE,
     process.env.MEETINGS_WORKSPACE,
@@ -153,10 +153,10 @@ const resolveWorkspaceRoot = () => {
 
 const chooseWorkspace = async (browserWindow) => {
   const options = {
-    buttonLabel: "Choose Workspace",
-    message: "Choose a folder containing your Notes workspace",
-    properties: ["openDirectory", "createDirectory"],
-    title: "Open Notes Workspace",
+    buttonLabel: 'Choose Workspace',
+    message: 'Choose a folder containing your Notes workspace',
+    properties: ['openDirectory', 'createDirectory'],
+    title: 'Open Notes Workspace',
   };
   const selection = browserWindow
     ? await dialog.showOpenDialog(browserWindow, options)
@@ -186,88 +186,88 @@ const sendToWebContents = (webContents, channel, value) => {
 };
 
 const reportClosingSaveFailure = (webContents, result) => {
-  if (!closingWindowIds.has(webContents.id) || result.status === "saved") {
+  if (!closingWindowIds.has(webContents.id) || result.status === 'saved') {
     return;
   }
   cancelQuit();
   sendToWebContents(
     webContents,
-    "meetings:close-blocked",
-    result.status === "conflict"
-      ? "Notes could not close because the file changed on disk. Resolve the conflict to finish closing."
+    'meetings:close-blocked',
+    result.status === 'conflict'
+      ? 'Notes could not close because the file changed on disk. Resolve the conflict to finish closing.'
       : `Notes could not close because saving failed: ${result.error}`,
   );
 };
 
 const buildApplicationMenu = () =>
   Menu.buildFromTemplate([
-    ...(process.platform === "darwin"
+    ...(process.platform === 'darwin'
       ? [
           {
-            label: "Notes",
+            label: 'Notes',
             submenu: [
-              { role: "about" },
-              { type: "separator" },
-              { role: "services" },
-              { type: "separator" },
-              { role: "hide" },
-              { role: "hideOthers" },
-              { role: "unhide" },
-              { type: "separator" },
-              { role: "quit" },
+              { role: 'about' },
+              { type: 'separator' },
+              { role: 'services' },
+              { type: 'separator' },
+              { role: 'hide' },
+              { role: 'hideOthers' },
+              { role: 'unhide' },
+              { type: 'separator' },
+              { role: 'quit' },
             ],
           },
         ]
       : []),
     {
-      label: "File",
+      label: 'File',
       submenu: [
         {
-          accelerator: "CommandOrControl+N",
+          accelerator: 'CommandOrControl+N',
           click: (_menuItem, browserWindow) => createWindow(browserWindow),
-          label: "New Window",
+          label: 'New Window',
         },
         {
-          accelerator: "CommandOrControl+O",
+          accelerator: 'CommandOrControl+O',
           click: (_menuItem, browserWindow) => {
             if (browserWindow instanceof BrowserWindow) {
-              browserWindow.webContents.send("meetings:choose-workspace-requested");
+              browserWindow.webContents.send('meetings:choose-workspace-requested');
             }
           },
-          label: "Open Workspace…",
+          label: 'Open Workspace…',
         },
-        { type: "separator" },
-        { accelerator: "CommandOrControl+W", role: "close" },
+        { type: 'separator' },
+        { accelerator: 'CommandOrControl+W', role: 'close' },
       ],
     },
-    { role: "editMenu" },
+    { role: 'editMenu' },
     {
-      label: "View",
+      label: 'View',
       submenu: [
-        { role: "reload" },
+        { role: 'reload' },
         {
-          accelerator: "CommandOrControl+Alt+J",
+          accelerator: 'CommandOrControl+Alt+J',
           click: (_menuItem, browserWindow) => {
             if (browserWindow instanceof BrowserWindow) {
               browserWindow.webContents.toggleDevTools();
             }
           },
-          label: "Toggle Developer Tools",
+          label: 'Toggle Developer Tools',
         },
-        { type: "separator" },
-        { role: "resetZoom" },
-        { role: "zoomIn" },
-        { role: "zoomOut" },
-        { type: "separator" },
-        { role: "togglefullscreen" },
+        { type: 'separator' },
+        { role: 'resetZoom' },
+        { role: 'zoomIn' },
+        { role: 'zoomOut' },
+        { type: 'separator' },
+        { role: 'togglefullscreen' },
       ],
     },
-    { role: "windowMenu" },
+    { role: 'windowMenu' },
   ]);
 
 const createWindow = (sourceWindow, restoredSession) => {
   const sourceSession = sourceWindow && windowSessions.get(sourceWindow.webContents.id);
-  const savedState = readWindowState(app.getPath("userData"));
+  const savedState = readWindowState(app.getPath('userData'));
   const inheritedLayout = sourceSession?.layout ?? savedState?.layout;
   const session = restoredSession
     ? { ...restoredSession }
@@ -287,32 +287,32 @@ const createWindow = (sourceWindow, restoredSession) => {
     ? validateWindowStateOnScreen(preferredState, screen.getAllDisplays())
     : null;
   const { height, width } = screen.getPrimaryDisplay().workAreaSize;
-  const useMacVibrancy = process.platform === "darwin";
+  const useMacVibrancy = process.platform === 'darwin';
   const window = new BrowserWindow({
-    autoHideMenuBar: process.platform !== "linux",
+    autoHideMenuBar: process.platform !== 'linux',
     backgroundColor: useMacVibrancy
-      ? "#00000000"
+      ? '#00000000'
       : nativeTheme.shouldUseDarkColors
-        ? "#141414"
-        : "#f8f8f6",
+        ? '#141414'
+        : '#f8f8f6',
     height: validatedState?.height ?? Math.max(720, Math.floor(height * 0.86)),
     minHeight: 520,
     minWidth: 320,
     show: false,
-    title: "Notes",
-    titleBarStyle: useMacVibrancy ? "hiddenInset" : "default",
+    title: 'Notes',
+    titleBarStyle: useMacVibrancy ? 'hiddenInset' : 'default',
     ...(useMacVibrancy
       ? {
           trafficLightPosition: { x: 12, y: 12 },
           transparent: true,
-          vibrancy: "under-window",
-          visualEffectState: "followWindow",
+          vibrancy: 'under-window',
+          visualEffectState: 'followWindow',
         }
       : {}),
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
-      preload: join(__dirname, "preload.cjs"),
+      preload: join(__dirname, 'preload.cjs'),
     },
     width: validatedState?.width ?? Math.max(1120, Math.floor(width * 0.86)),
     ...(validatedState ? { x: validatedState.x, y: validatedState.y } : { center: true }),
@@ -330,7 +330,7 @@ const createWindow = (sourceWindow, restoredSession) => {
   windowSessions.set(windowWebContentsId, session);
   getWorkspaceSession(session.workspaceRoot);
   persistOpenWindows();
-  window.once("ready-to-show", () => window.show());
+  window.once('ready-to-show', () => window.show());
   const rememberBounds = () => {
     if (!quitSessions) {
       session.bounds = captureWindowBounds(window);
@@ -338,29 +338,29 @@ const createWindow = (sourceWindow, restoredSession) => {
     }
   };
   for (const event of [
-    "move",
-    "resize",
-    "maximize",
-    "unmaximize",
-    "enter-full-screen",
-    "leave-full-screen",
+    'move',
+    'resize',
+    'maximize',
+    'unmaximize',
+    'enter-full-screen',
+    'leave-full-screen',
   ]) {
     window.on(event, rememberBounds);
   }
-  window.on("close", () => {
+  window.on('close', () => {
     closingWindowIds.add(windowWebContentsId);
     if (!quitSessions) {
       session.bounds = captureWindowBounds(window);
     }
     persistOpenWindows();
   });
-  window.on("closed", () => {
+  window.on('closed', () => {
     closingWindowIds.delete(windowWebContentsId);
     // Only a completed close changes the default. A canceled close must not win.
     try {
-      writeWindowState({ ...session.bounds, layout: session.layout }, app.getPath("userData"));
+      writeWindowState({ ...session.bounds, layout: session.layout }, app.getPath('userData'));
     } catch (error) {
-      console.error("Failed to remember the last Notes window:", error);
+      console.error('Failed to remember the last Notes window:', error);
     }
     windowSessions.delete(windowWebContentsId);
     persistOpenWindows();
@@ -368,17 +368,17 @@ const createWindow = (sourceWindow, restoredSession) => {
 
   window.webContents.setWindowOpenHandler(({ url }) => {
     void shell.openExternal(url);
-    return { action: "deny" };
+    return { action: 'deny' };
   });
-  window.webContents.on("will-navigate", (event, url) => {
+  window.webContents.on('will-navigate', (event, url) => {
     const target = new URL(url);
-    if (target.protocol !== "file:" && target.origin !== process.env.ELECTRON_RENDERER_URL) {
+    if (target.protocol !== 'file:' && target.origin !== process.env.ELECTRON_RENDERER_URL) {
       event.preventDefault();
       void shell.openExternal(url);
     }
   });
   const rendererURL = process.env.ELECTRON_RENDERER_URL;
-  const target = new URL(rendererURL ?? pathToFileURL(join(appRoot, "dist/index.html")).toString());
+  const target = new URL(rendererURL ?? pathToFileURL(join(appRoot, 'dist/index.html')).toString());
   const sourceURL = sourceWindow?.webContents.getURL();
   if (sourceURL) {
     target.hash = new URL(sourceURL).hash;
@@ -388,20 +388,20 @@ const createWindow = (sourceWindow, restoredSession) => {
   void window.loadURL(target.toString());
 };
 
-ipcMain.on("meetings:system-accent", (event) => {
+ipcMain.on('meetings:system-accent', (event) => {
   event.returnValue = getSystemAccent();
 });
-ipcMain.on("meetings:window-layout", (event) => {
+ipcMain.on('meetings:window-layout', (event) => {
   event.returnValue = windowSessions.get(event.sender.id)?.layout ?? null;
 });
-ipcMain.on("meetings:window-state", (event, state) => {
+ipcMain.on('meetings:window-state', (event, state) => {
   const session = windowSessions.get(event.sender.id);
   const layout = normalizeWindowLayout(state?.layout);
   if (!session || !layout) {
     return;
   }
   session.layout = layout;
-  if (typeof state.activePath === "string") {
+  if (typeof state.activePath === 'string') {
     const path = normalizeDocumentPath(state.activePath);
     if (path) {
       session.activePath = path;
@@ -409,27 +409,27 @@ ipcMain.on("meetings:window-state", (event, state) => {
   }
   scheduleWindowState();
 });
-ipcMain.on("meetings:cancel-close", (event) => {
+ipcMain.on('meetings:cancel-close', (event) => {
   closingWindowIds.delete(event.sender.id);
   cancelQuit();
 });
-ipcMain.on("meetings:recovery-key", (event) => {
+ipcMain.on('meetings:recovery-key', (event) => {
   const session = windowSessions.get(event.sender.id);
   event.returnValue =
-    session?.recoveryId === "primary"
-      ? "notes.current-draft.v1"
+    session?.recoveryId === 'primary'
+      ? 'notes.current-draft.v1'
       : `notes.current-draft.v1.${session.recoveryId}.${encodeURIComponent(session.workspaceRoot)}`;
 });
-ipcMain.handle("meetings:load-workspace", (event) =>
+ipcMain.handle('meetings:load-workspace', (event) =>
   sessionForSender(event.sender).loadWorkspaceSnapshot(),
 );
-ipcMain.handle("meetings:choose-workspace", (event) => {
+ipcMain.handle('meetings:choose-workspace', (event) => {
   const browserWindow = BrowserWindow.getAllWindows().find(
     (window) => window.webContents === event.sender,
   );
   return chooseWorkspace(browserWindow);
 });
-ipcMain.handle("meetings:create-document", async (event, request) => {
+ipcMain.handle('meetings:create-document', async (event, request) => {
   const session = sessionForSender(event.sender);
   const document = await createWorkspaceDocument({
     ...request,
@@ -439,46 +439,46 @@ ipcMain.handle("meetings:create-document", async (event, request) => {
   session.publishSavedDocument(document, event.sender);
   return document;
 });
-ipcMain.handle("meetings:delete-document", (event, request) =>
+ipcMain.handle('meetings:delete-document', (event, request) =>
   deleteDocument({ ...request, root: sessionForSender(event.sender).requireWorkspaceRoot() }),
 );
-ipcMain.handle("meetings:complete-interview", (event, request) =>
+ipcMain.handle('meetings:complete-interview', (event, request) =>
   deleteInterview({ ...request, root: sessionForSender(event.sender).requireWorkspaceRoot() }),
 );
-ipcMain.handle("meetings:save-document", async (event, request) => {
+ipcMain.handle('meetings:save-document', async (event, request) => {
   const result = await sessionForSender(event.sender).saveDocument(request, event.sender);
   reportClosingSaveFailure(event.sender, result);
   return result;
 });
-ipcMain.on("meetings:close-ready", (event) => {
+ipcMain.on('meetings:close-ready', (event) => {
   if (closingWindowIds.has(event.sender.id)) {
-    sendToWebContents(event.sender, "meetings:retry-close");
+    sendToWebContents(event.sender, 'meetings:retry-close');
   }
 });
-ipcMain.on("meetings:save-document-sync", (event, request) => {
+ipcMain.on('meetings:save-document-sync', (event, request) => {
   const { keepalive, ...saveRequest } = request;
   const result = sessionForSender(event.sender).saveDocumentSync(saveRequest, event.sender);
   if (keepalive && closingWindowIds.has(event.sender.id)) {
-    if (result.status !== "saved") {
+    if (result.status !== 'saved') {
       cancelQuit();
       sendToWebContents(
         event.sender,
-        "meetings:close-blocked",
-        result.status === "conflict"
-          ? "Notes could not close because the file changed on disk. Resolve the conflict to finish closing."
+        'meetings:close-blocked',
+        result.status === 'conflict'
+          ? 'Notes could not close because the file changed on disk. Resolve the conflict to finish closing.'
           : `Notes could not close because saving failed: ${result.error}`,
       );
     }
   }
   event.returnValue = result;
 });
-ipcMain.handle("meetings:format-document", (event, request) =>
+ipcMain.handle('meetings:format-document', (event, request) =>
   formatDocumentContent({
     ...request,
     root: sessionForSender(event.sender).requireWorkspaceRoot(),
   }),
 );
-ipcMain.handle("meetings:restore-document", async (event, request) => {
+ipcMain.handle('meetings:restore-document', async (event, request) => {
   const session = sessionForSender(event.sender);
   const document = await restoreDocument({
     ...request,
@@ -493,8 +493,8 @@ const lock = !squirrelStartup && app.requestSingleInstanceLock();
 if (squirrelStartup || !lock) {
   app.quit();
 } else {
-  app.setName("Notes");
-  app.on("second-instance", () => {
+  app.setName('Notes');
+  app.on('second-instance', () => {
     const window = BrowserWindow.getAllWindows()[0];
     if (window) {
       if (window.isMinimized()) {
@@ -504,20 +504,20 @@ if (squirrelStartup || !lock) {
       window.focus();
     }
   });
-  app.on("ready", () => {
-    nativeTheme.on("updated", updateSystemAccent);
-    if (process.platform === "darwin") {
+  app.on('ready', () => {
+    nativeTheme.on('updated', updateSystemAccent);
+    if (process.platform === 'darwin') {
       colorPreferencesSubscription = systemPreferences.subscribeNotification(
-        "AppleColorPreferencesChangedNotification",
+        'AppleColorPreferencesChangedNotification',
         updateSystemAccent,
       );
     } else {
-      systemPreferences.on("accent-color-changed", updateSystemAccent);
+      systemPreferences.on('accent-color-changed', updateSystemAccent);
     }
     const resolvedWorkspaceRoot = resolveWorkspaceRoot();
-    workspaceRoot = resolvedWorkspaceRoot ? initializeWorkspace(resolvedWorkspaceRoot) : "";
+    workspaceRoot = resolvedWorkspaceRoot ? initializeWorkspace(resolvedWorkspaceRoot) : '';
     Menu.setApplicationMenu(buildApplicationMenu());
-    const openWindows = readOpenWindows(app.getPath("userData"));
+    const openWindows = readOpenWindows(app.getPath('userData'));
     if (openWindows.length) {
       for (const session of openWindows) {
         createWindow(undefined, session);
@@ -529,15 +529,15 @@ if (squirrelStartup || !lock) {
         createWindow();
       }
     } else {
-      createWindow(undefined, { recoveryId: "primary", workspaceRoot });
+      createWindow(undefined, { recoveryId: 'primary', workspaceRoot });
     }
   });
-  app.on("activate", () => {
+  app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
     }
   });
-  app.on("before-quit", () => {
+  app.on('before-quit', () => {
     if (!quitSessions) {
       for (const window of BrowserWindow.getAllWindows()) {
         if (!window.isDestroyed()) {
@@ -552,7 +552,7 @@ if (squirrelStartup || !lock) {
     }
     persistOpenWindows();
   });
-  app.on("will-quit", () => {
+  app.on('will-quit', () => {
     if (colorPreferencesSubscription !== null) {
       systemPreferences.unsubscribeNotification(colorPreferencesSubscription);
     }
@@ -561,8 +561,8 @@ if (squirrelStartup || !lock) {
       session.stopWorkspaceWatchers();
     }
   });
-  app.on("window-all-closed", () => {
-    if (quitSessions || process.platform !== "darwin") {
+  app.on('window-all-closed', () => {
+    if (quitSessions || process.platform !== 'darwin') {
       app.quit();
     }
   });

@@ -9,26 +9,16 @@ type SidebarWidthStorage = Pick<Storage, 'getItem' | 'setItem'>;
 export const clampSidebarWidth = (width: number): number =>
   Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, Math.round(width)));
 
-export const readSidebarWidth = (
-  storage: SidebarWidthStorage = localStorage,
-): number => {
+export const readSidebarWidth = (storage: SidebarWidthStorage = localStorage): number => {
   const raw = storage.getItem(SIDEBAR_WIDTH_STORAGE_KEY);
   if (!raw) {
     return SIDEBAR_DEFAULT_WIDTH;
   }
 
   const parsed = Number(raw);
-  return Number.isFinite(parsed)
-    ? clampSidebarWidth(parsed)
-    : SIDEBAR_DEFAULT_WIDTH;
+  return Number.isFinite(parsed) ? clampSidebarWidth(parsed) : SIDEBAR_DEFAULT_WIDTH;
 };
 
-export const writeSidebarWidth = (
-  width: number,
-  storage: SidebarWidthStorage = localStorage,
-) => {
-  storage.setItem(
-    SIDEBAR_WIDTH_STORAGE_KEY,
-    String(clampSidebarWidth(width)),
-  );
+export const writeSidebarWidth = (width: number, storage: SidebarWidthStorage = localStorage) => {
+  storage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, String(clampSidebarWidth(width)));
 };

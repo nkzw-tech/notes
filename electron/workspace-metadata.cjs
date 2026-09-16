@@ -6,8 +6,7 @@ const { resolve } = require('node:path');
 const WORKSPACE_METADATA_PATH = 'config/people.json';
 
 /** @param {string} value */
-const isVisiblePeoplePath = (value) =>
-  /^people\/(?![._])[^/\\\0]+\.md$/.test(value);
+const isVisiblePeoplePath = (value) => /^people\/(?![._])[^/\\\0]+\.md$/.test(value);
 
 /** @param {string} value */
 const parseWorkspaceMetadata = (value) => {
@@ -25,9 +24,7 @@ const parseWorkspaceMetadata = (value) => {
     parsed === null ||
     !('peoplePaths' in parsed) ||
     !Array.isArray(parsed.peoplePaths) ||
-    parsed.peoplePaths.some(
-      (path) => typeof path !== 'string' || !isVisiblePeoplePath(path),
-    )
+    parsed.peoplePaths.some((path) => typeof path !== 'string' || !isVisiblePeoplePath(path))
   ) {
     throw new Error(
       `${WORKSPACE_METADATA_PATH} must contain a peoplePaths array of visible people/*.md paths.`,
@@ -35,9 +32,7 @@ const parseWorkspaceMetadata = (value) => {
   }
 
   if (new Set(parsed.peoplePaths).size !== parsed.peoplePaths.length) {
-    throw new Error(
-      `${WORKSPACE_METADATA_PATH} contains duplicate peoplePaths.`,
-    );
+    throw new Error(`${WORKSPACE_METADATA_PATH} contains duplicate peoplePaths.`);
   }
 
   return { peoplePaths: [...parsed.peoplePaths] };
@@ -45,9 +40,7 @@ const parseWorkspaceMetadata = (value) => {
 
 /** @param {string} root */
 const readWorkspaceMetadata = async (root) =>
-  parseWorkspaceMetadata(
-    await readFile(resolve(root, WORKSPACE_METADATA_PATH), 'utf8'),
-  );
+  parseWorkspaceMetadata(await readFile(resolve(root, WORKSPACE_METADATA_PATH), 'utf8'));
 
 /** @param {string} root */
 const readWorkspaceMetadataOrDefault = async (root) => {
@@ -66,16 +59,12 @@ const readWorkspaceMetadataOrDefault = async (root) => {
 
 /** @param {{metadataError: string | null; peoplePaths: string[]}} metadata @param {Set<string>} documentPaths */
 const reconcileWorkspaceMetadataPaths = (metadata, documentPaths) => {
-  const missing = metadata.peoplePaths.filter(
-    (path) => !documentPaths.has(path),
-  );
+  const missing = metadata.peoplePaths.filter((path) => !documentPaths.has(path));
   return missing.length === 0
     ? metadata
     : {
         metadataError: `${WORKSPACE_METADATA_PATH} references missing files: ${missing.join(', ')}`,
-        peoplePaths: metadata.peoplePaths.filter((path) =>
-          documentPaths.has(path),
-        ),
+        peoplePaths: metadata.peoplePaths.filter((path) => documentPaths.has(path)),
       };
 };
 

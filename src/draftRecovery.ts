@@ -35,10 +35,7 @@ const isRecoveryDraft = (value: unknown): value is RecoveryDraft =>
   typeof value.updatedAt === 'number';
 
 export const readRecoveryDraft = (
-  storage: Pick<
-    RecoveryStorage,
-    'getItem' | 'removeItem'
-  > | null = getRecoveryStorage(),
+  storage: Pick<RecoveryStorage, 'getItem' | 'removeItem'> | null = getRecoveryStorage(),
 ) => {
   if (!storage) {
     return null;
@@ -57,10 +54,14 @@ export const readRecoveryDraft = (
     if (isRecoveryDraft(value)) {
       return value;
     }
-  } catch {}
+  } catch {
+    // Invalid JSON is discarded below, just like a draft with an invalid schema.
+  }
   try {
     storage.removeItem(getRecoveryDraftKey());
-  } catch {}
+  } catch {
+    // An invalid draft must not block startup if storage prevents its removal.
+  }
   return null;
 };
 
@@ -72,10 +73,7 @@ export const writeRecoveryDraft = (
     return false;
   }
   try {
-    storage.setItem(
-      getRecoveryDraftKey(),
-      JSON.stringify({ ...draft, updatedAt: Date.now() }),
-    );
+    storage.setItem(getRecoveryDraftKey(), JSON.stringify({ ...draft, updatedAt: Date.now() }));
     return true;
   } catch {
     return false;
@@ -84,10 +82,7 @@ export const writeRecoveryDraft = (
 
 export const clearRecoveryDraft = (
   path: string,
-  storage: Pick<
-    RecoveryStorage,
-    'getItem' | 'removeItem'
-  > | null = getRecoveryStorage(),
+  storage: Pick<RecoveryStorage, 'getItem' | 'removeItem'> | null = getRecoveryStorage(),
 ) => {
   if (!storage) {
     return;
@@ -96,7 +91,9 @@ export const clearRecoveryDraft = (
   if (draft?.path === path) {
     try {
       storage.removeItem(getRecoveryDraftKey());
-    } catch {}
+    } catch {
+      // Leave the recovery copy in place if storage prevents its removal.
+    }
   }
 };
 

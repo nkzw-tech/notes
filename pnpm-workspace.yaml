@@ -1,13 +1,28 @@
 allowBuilds:
-  "@parcel/watcher": true
+  '@parcel/watcher': true
   electron: true
   esbuild: true
 blockExoticSubdeps: false
+catalog:
+  vite: npm:@voidzero-dev/vite-plus-core@^0.3.2
+  vite-plus: ^0.3.2
+  vitest: 5.0.0
 nodeLinker: hoisted
 minimumReleaseAgeExclude:
-  - "@nkzw/*"
+  - '@nkzw/*'
 onlyBuiltDependencies:
-  - "@nkzw/mdx-editor"
-  - "@parcel/watcher"
+  - '@nkzw/mdx-editor'
+  - '@parcel/watcher'
   - electron
   - esbuild
+overrides:
+  extract-zip>yauzl: ^3.4.0
+  vite: 'catalog:'
+  vite-plus>vitest: 'catalog:'
+peerDependencyRules:
+  allowAny:
+    - vite
+    - vitest
+  allowedVersions:
+    vite: '*'
+    vitest: '*'

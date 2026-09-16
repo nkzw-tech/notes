@@ -13,26 +13,12 @@ const {
   unlinkSync,
   writeFileSync,
 } = require('node:fs');
-const {
-  open,
-  link,
-  readdir,
-  readFile,
-  rename,
-  stat,
-  unlink,
-} = require('node:fs/promises');
+const { open, link, readdir, readFile, rename, stat, unlink } = require('node:fs/promises');
 const { dirname, relative, resolve, sep } = require('node:path');
 const { createWorkspaceDocument } = require('./document-creation.cjs');
 
 const MAX_DOCUMENT_BYTES = 2 * 1024 * 1024;
-const DOCUMENT_DIRECTORIES = new Set([
-  'docs',
-  'interviews',
-  'meetings',
-  'people',
-  'reports',
-]);
+const DOCUMENT_DIRECTORIES = new Set(['docs', 'interviews', 'meetings', 'people', 'reports']);
 const pendingDocumentWrites = new Map();
 
 /**
@@ -108,26 +94,17 @@ class DocumentConflictError extends Error {
 /** @typedef {{content: string; hash: string; mtimeMs: number; path: string}} StoredDocument */
 
 /** @param {string} content */
-const hashContent = (content) =>
-  createHash('sha256').update(content).digest('hex');
+const hashContent = (content) => createHash('sha256').update(content).digest('hex');
 
 /** @param {string} value */
 const normalizeDocumentPath = (value) => {
   const normalized = value.replaceAll('\\', '/');
-  if (
-    normalized.length === 0 ||
-    normalized.startsWith('/') ||
-    normalized.includes('\0')
-  ) {
+  if (normalized.length === 0 || normalized.startsWith('/') || normalized.includes('\0')) {
     return null;
   }
 
   const segments = normalized.split('/');
-  if (
-    segments.some(
-      (segment) => segment === '' || segment === '..' || segment === '.',
-    )
-  ) {
+  if (segments.some((segment) => segment === '' || segment === '..' || segment === '.')) {
     return null;
   }
 
@@ -221,16 +198,12 @@ const listDocuments = async (root) => {
       }
     }
   }
-  return Promise.all(
-    paths.sort().map((documentPath) => readDocument(root, documentPath)),
-  );
+  return Promise.all(paths.sort().map((documentPath) => readDocument(root, documentPath)));
 };
 
 /** @param {string} root */
 const isWorkspaceRoot = (root) =>
-  [...DOCUMENT_DIRECTORIES].every((directory) =>
-    existsSync(resolve(root, directory)),
-  );
+  [...DOCUMENT_DIRECTORIES].every((directory) => existsSync(resolve(root, directory)));
 
 /**
  * @param {{baseHash: string; content: string; path: string; root: string}} request
@@ -277,9 +250,7 @@ const writeDocumentUnlocked = async ({ baseHash, content, path, root }) => {
  * @returns {Promise<StoredDocument>}
  */
 const writeDocument = async (request) => {
-  return serializeDocumentWrite(request.root, request.path, () =>
-    writeDocumentUnlocked(request),
-  );
+  return serializeDocumentWrite(request.root, request.path, () => writeDocumentUnlocked(request));
 };
 
 /**
@@ -289,10 +260,7 @@ const deleteResolvedDocument = async ({ path, referenceAction, root }) => {
   const resolved = resolveDocumentPath(root, path);
   const filename = resolved.path.split('/').at(-1);
   const references = (await listDocuments(root))
-    .filter(
-      (document) =>
-        document.path !== resolved.path && document.content.includes(filename),
-    )
+    .filter((document) => document.path !== resolved.path && document.content.includes(filename))
     .map((document) => document.path);
   if (references.length > 0) {
     throw new Error(
@@ -352,9 +320,7 @@ const restoreDocumentUnlocked = async ({ content, path, root }) => {
 
 /** @param {{content: string; path: string; root: string}} request */
 const restoreDocument = async (request) =>
-  serializeDocumentWrite(request.root, request.path, () =>
-    restoreDocumentUnlocked(request),
-  );
+  serializeDocumentWrite(request.root, request.path, () => restoreDocumentUnlocked(request));
 
 /**
  * @param {{baseHash: string; content: string; path: string; root: string}} request
@@ -414,9 +380,7 @@ const formatDocumentContent = async ({ content, path, root }) => {
   const result = await format(resolved.absolutePath, content, {
     proseWrap: 'never',
   });
-  const formattingError = result.errors.find(
-    ({ severity }) => severity === 'Error',
-  );
+  const formattingError = result.errors.find(({ severity }) => severity === 'Error');
   if (formattingError) {
     throw new Error(formattingError.message);
   }

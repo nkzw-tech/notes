@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from 'vitest';
+import { describe, expect, test, vi } from 'vite-plus/test';
 import {
   isSidebarToggleShortcut,
   readSidebarCollapsed,
@@ -23,10 +23,7 @@ describe('sidebar visibility', () => {
     expect(readSidebarCollapsed(storage)).toBe(false);
     writeSidebarCollapsed(true, storage);
     expect(readSidebarCollapsed(storage)).toBe(true);
-    expect(storage.setItem).toHaveBeenCalledWith(
-      'notes.sidebar.collapsed',
-      'true',
-    );
+    expect(storage.setItem).toHaveBeenCalledWith('notes.sidebar.collapsed', 'true');
   });
 
   test('falls back to expanded when storage is unavailable', () => {
@@ -53,9 +50,7 @@ describe('sidebar visibility', () => {
     };
 
     expect(isSidebarToggleShortcut(event)).toBe(true);
-    expect(
-      isSidebarToggleShortcut({ ...event, ctrlKey: true, metaKey: false }),
-    ).toBe(true);
+    expect(isSidebarToggleShortcut({ ...event, ctrlKey: true, metaKey: false })).toBe(true);
     expect(isSidebarToggleShortcut({ ...event, shiftKey: false })).toBe(false);
     expect(isSidebarToggleShortcut({ ...event, altKey: true })).toBe(false);
   });

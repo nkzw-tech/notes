@@ -1,5 +1,5 @@
 import { createRequire } from 'node:module';
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'vite-plus/test';
 import {
   parseWorkspaceMetadata,
   readWorkspaceMetadataOrDefault,
@@ -11,45 +11,27 @@ const electronMetadata = require('./electron/workspace-metadata.cjs') as {
   parseWorkspaceMetadata: typeof parseWorkspaceMetadata;
 };
 
-const parsers = [
-  parseWorkspaceMetadata,
-  electronMetadata.parseWorkspaceMetadata,
-];
+const parsers = [parseWorkspaceMetadata, electronMetadata.parseWorkspaceMetadata];
 
 describe.each(parsers)('workspace metadata parser', (parse) => {
   test('accepts unique visible people paths', () => {
     expect(
       parse(
         JSON.stringify({
-          peoplePaths: [
-            'people/02-samuel-macleod.md',
-            'people/33-riley-example.md',
-          ],
+          peoplePaths: ['people/02-samuel-macleod.md', 'people/33-riley-example.md'],
         }),
       ),
     ).toEqual({
-      peoplePaths: [
-        'people/02-samuel-macleod.md',
-        'people/33-riley-example.md',
-      ],
+      peoplePaths: ['people/02-samuel-macleod.md', 'people/33-riley-example.md'],
     });
   });
 
   test.each([
     ['non-JSON content', 'not JSON'],
     ['a missing array', '{}'],
-    [
-      'paths outside people',
-      JSON.stringify({ peoplePaths: ['reports/person.md'] }),
-    ],
-    [
-      'nested and traversal paths',
-      JSON.stringify({ peoplePaths: ['people/../docs/todo.md'] }),
-    ],
-    [
-      'hidden and template paths',
-      JSON.stringify({ peoplePaths: ['people/_template.md'] }),
-    ],
+    ['paths outside people', JSON.stringify({ peoplePaths: ['reports/person.md'] })],
+    ['nested and traversal paths', JSON.stringify({ peoplePaths: ['people/../docs/todo.md'] })],
+    ['hidden and template paths', JSON.stringify({ peoplePaths: ['people/_template.md'] })],
     [
       'duplicate paths',
       JSON.stringify({
@@ -80,8 +62,7 @@ test('reports and removes registry entries for missing person files', () => {
       new Set(['people/exists.md']),
     ),
   ).toEqual({
-    metadataError:
-      'config/people.json references missing files: people/missing.md',
+    metadataError: 'config/people.json references missing files: people/missing.md',
     peoplePaths: ['people/exists.md'],
   });
 });

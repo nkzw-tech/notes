@@ -1,19 +1,19 @@
 // @ts-check
 
 const SECTION_NAMES = [
-  "Reports",
-  "Interviews",
-  "Meetings Overview",
-  "Upcoming Meetings",
-  "People",
-  "Archive",
+  'Reports',
+  'Interviews',
+  'Meetings Overview',
+  'Upcoming Meetings',
+  'People',
+  'Archive',
 ];
 
 const normalizeWindowLayout = (value) => {
   if (
     !value ||
-    typeof value.sidebarCollapsed !== "boolean" ||
-    typeof value.sidebarWidth !== "number" ||
+    typeof value.sidebarCollapsed !== 'boolean' ||
+    typeof value.sidebarWidth !== 'number' ||
     !Number.isFinite(value.sidebarWidth)
   ) {
     return null;
@@ -23,7 +23,7 @@ const normalizeWindowLayout = (value) => {
     sidebarWidth: Math.min(640, Math.max(220, Math.round(value.sidebarWidth))),
     sectionExpanded: Object.fromEntries(
       SECTION_NAMES.flatMap((name) =>
-        typeof value.sectionExpanded?.[name] === "boolean"
+        typeof value.sectionExpanded?.[name] === 'boolean'
           ? [[name, value.sectionExpanded[name]]]
           : [],
       ),

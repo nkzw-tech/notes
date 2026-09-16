@@ -1,15 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { createRequire } from 'node:module';
+import { open, link, readdir, readFile, rename, stat, unlink } from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import {
-  open,
-  link,
-  readdir,
-  readFile,
-  rename,
-  stat,
-  unlink,
-} from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { dirname, relative, resolve, sep } from 'node:path';
 import { format } from 'oxfmt';
 import {
@@ -69,9 +61,7 @@ const syncDirectory = async (path: string) => {
       await directory.close();
     }
   } catch (error) {
-    if (
-      !['EINVAL', 'EPERM'].includes((error as NodeJS.ErrnoException).code ?? '')
-    ) {
+    if (!['EINVAL', 'EPERM'].includes((error as NodeJS.ErrnoException).code ?? '')) {
       throw error;
     }
   }
@@ -121,25 +111,16 @@ export class DocumentConflictError extends Error {
   }
 }
 
-const hashContent = (content: string) =>
-  createHash('sha256').update(content).digest('hex');
+const hashContent = (content: string) => createHash('sha256').update(content).digest('hex');
 
 export const normalizeDocumentPath = (value: string) => {
   const normalized = value.replaceAll('\\', '/');
-  if (
-    normalized.length === 0 ||
-    normalized.startsWith('/') ||
-    normalized.includes('\0')
-  ) {
+  if (normalized.length === 0 || normalized.startsWith('/') || normalized.includes('\0')) {
     return null;
   }
 
   const segments = normalized.split('/');
-  if (
-    segments.some(
-      (segment) => segment === '' || segment === '..' || segment === '.',
-    )
-  ) {
+  if (segments.some((segment) => segment === '' || segment === '..' || segment === '.')) {
     return null;
   }
 
@@ -182,10 +163,7 @@ export const resolveDocumentPath = (root: string, documentPath: string) => {
   };
 };
 
-export const readDocument = async (
-  root: string,
-  documentPath: string,
-): Promise<StoredDocument> => {
+export const readDocument = async (root: string, documentPath: string): Promise<StoredDocument> => {
   const resolved = resolveDocumentPath(root, documentPath);
   const [content, fileStat] = await Promise.all([
     readFile(resolved.absolutePath, 'utf8'),
@@ -207,9 +185,7 @@ export const readDocument = async (
 export const listDocuments = async (root: string) => {
   const rootEntries = await readdir(root, { withFileTypes: true });
   const paths = rootEntries
-    .filter(
-      (entry) => entry.isFile() && normalizeDocumentPath(entry.name) !== null,
-    )
+    .filter((entry) => entry.isFile() && normalizeDocumentPath(entry.name) !== null)
     .map((entry) => entry.name);
 
   for (const directory of DOCUMENT_DIRECTORIES) {
@@ -229,9 +205,7 @@ export const listDocuments = async (root: string) => {
     }
   }
 
-  return Promise.all(
-    paths.sort().map((documentPath) => readDocument(root, documentPath)),
-  );
+  return Promise.all(paths.sort().map((documentPath) => readDocument(root, documentPath)));
 };
 
 export const loadWorkspace = async (root: string) => {
@@ -241,10 +215,7 @@ export const loadWorkspace = async (root: string) => {
   ]);
   return {
     documents,
-    ...reconcileWorkspaceMetadataPaths(
-      metadata,
-      new Set(documents.map(({ path }) => path)),
-    ),
+    ...reconcileWorkspaceMetadataPaths(metadata, new Set(documents.map(({ path }) => path))),
   };
 };
 
@@ -303,9 +274,7 @@ export const writeDocument = async (request: {
   path: string;
   root: string;
 }) => {
-  return serializeDocumentWrite(request.root, request.path, () =>
-    writeDocumentUnlocked(request),
-  );
+  return serializeDocumentWrite(request.root, request.path, () => writeDocumentUnlocked(request));
 };
 
 const deleteResolvedDocument = async ({
@@ -320,10 +289,7 @@ const deleteResolvedDocument = async ({
   const resolved = resolveDocumentPath(root, path);
   const filename = resolved.path.split('/').at(-1)!;
   const references = (await listDocuments(root))
-    .filter(
-      (document) =>
-        document.path !== resolved.path && document.content.includes(filename),
-    )
+    .filter((document) => document.path !== resolved.path && document.content.includes(filename))
     .map((document) => document.path);
   if (references.length > 0) {
     throw new Error(
@@ -335,24 +301,12 @@ const deleteResolvedDocument = async ({
   return { path: resolved.path };
 };
 
-export const deleteDocument = async ({
-  path,
-  root,
-}: {
-  path: string;
-  root: string;
-}) =>
+export const deleteDocument = async ({ path, root }: { path: string; root: string }) =>
   serializeDocumentWrite(root, path, () =>
     deleteResolvedDocument({ path, referenceAction: 'deleting it', root }),
   );
 
-export const deleteInterview = async ({
-  path,
-  root,
-}: {
-  path: string;
-  root: string;
-}) =>
+export const deleteInterview = async ({ path, root }: { path: string; root: string }) =>
   serializeDocumentWrite(root, path, async () => {
     const resolved = resolveDocumentPath(root, path);
     if (!resolved.path.startsWith('interviews/')) {
@@ -398,14 +352,8 @@ const restoreDocumentUnlocked = async ({
   return readDocument(root, path);
 };
 
-export const restoreDocument = async (request: {
-  content: string;
-  path: string;
-  root: string;
-}) =>
-  serializeDocumentWrite(request.root, request.path, () =>
-    restoreDocumentUnlocked(request),
-  );
+export const restoreDocument = async (request: { content: string; path: string; root: string }) =>
+  serializeDocumentWrite(request.root, request.path, () => restoreDocumentUnlocked(request));
 
 export const formatDocumentContent = async ({
   content,
@@ -424,9 +372,7 @@ export const formatDocumentContent = async ({
   const result = await format(resolved.absolutePath, content, {
     proseWrap: 'never',
   });
-  const formattingError = result.errors.find(
-    ({ severity }) => severity === 'Error',
-  );
+  const formattingError = result.errors.find(({ severity }) => severity === 'Error');
   if (formattingError) {
     throw new Error(formattingError.message);
   }
@@ -436,11 +382,7 @@ export const formatDocumentContent = async ({
   return result.code;
 };
 
-const sendJson = (
-  response: ServerResponse,
-  statusCode: number,
-  value: unknown,
-) => {
+const sendJson = (response: ServerResponse, statusCode: number, value: unknown) => {
   response.statusCode = statusCode;
   response.setHeader('Content-Type', 'application/json; charset=utf-8');
   response.setHeader('Cache-Control', 'no-store');
@@ -473,7 +415,7 @@ const requestIsSameOrigin = (request: IncomingMessage) => {
 
 const readJsonBody = async (request: IncomingMessage) => {
   let size = 0;
-  const chunks: Buffer[] = [];
+  const chunks: Array<Buffer> = [];
 
   for await (const chunk of request) {
     const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
@@ -508,10 +450,7 @@ export const createDocumentMiddleware = ({
         sendJson(response, 200, await loadWorkspace(root));
       } catch (error) {
         sendJson(response, 500, {
-          error:
-            error instanceof Error
-              ? error.message
-              : 'Failed to load documents.',
+          error: error instanceof Error ? error.message : 'Failed to load documents.',
         });
       }
       return;
@@ -682,14 +621,9 @@ export const createDocumentMiddleware = ({
       }
 
       const code = (error as NodeJS.ErrnoException).code;
-      sendJson(
-        response,
-        code === 'ENOENT' ? 404 : code === 'EEXIST' ? 409 : 400,
-        {
-          error:
-            error instanceof Error ? error.message : 'Failed to save document.',
-        },
-      );
+      sendJson(response, code === 'ENOENT' ? 404 : code === 'EEXIST' ? 409 : 400, {
+        error: error instanceof Error ? error.message : 'Failed to save document.',
+      });
     }
   };
 };

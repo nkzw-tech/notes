@@ -7,9 +7,7 @@ import {
   useRef,
   useState,
   useLayoutEffect,
-} from "react";
-import type { EditableMarkdownHandle, SaveStatus } from "./EditableMarkdown.tsx";
-import { DocumentPalette } from "./DocumentPalette.tsx";
+} from 'react';
 import {
   applyStoredDocumentChanges,
   createMeetingDocuments,
@@ -17,7 +15,8 @@ import {
   resolveMarkdownPath,
   type MeetingDocument,
   type StoredDocument,
-} from "./content.ts";
+} from './content.ts';
+import { reconcileDeletedDocumentNavigation } from './deletedDocumentState.ts';
 import {
   completeInterview,
   createDocument,
@@ -28,32 +27,29 @@ import {
   subscribeToWorkspaceMetadataChanges,
   type CreateDocumentRequest,
   type DocumentChangeEvent,
-} from "./documentApi.ts";
+} from './documentApi.ts';
+import { DocumentPalette } from './DocumentPalette.tsx';
 import {
   clearRecoveryDraft,
   fromStorageContent,
   readRecoveryDraft,
   type RecoveryDraft,
-} from "./draftRecovery.ts";
-import { reconcileDeletedDocumentNavigation } from "./deletedDocumentState.ts";
-import { ChevronIcon, MenuIcon, SearchIcon, SidebarSimpleIcon } from "./icons.tsx";
-import { isSidebarToggleShortcut } from "./sidebarVisibility.ts";
-import { useResizableSidebar } from "./useResizableSidebar.ts";
-import {
-  readWindowLayout,
-  persistWindowLayout,
-  type CollapsibleGroup,
-} from "./windowLayout.ts";
+} from './draftRecovery.ts';
+import type { EditableMarkdownHandle, SaveStatus } from './EditableMarkdown.tsx';
+import { ChevronIcon, MenuIcon, SearchIcon, SidebarSimpleIcon } from './icons.tsx';
+import { isSidebarToggleShortcut } from './sidebarVisibility.ts';
+import { useResizableSidebar } from './useResizableSidebar.ts';
+import { readWindowLayout, persistWindowLayout, type CollapsibleGroup } from './windowLayout.ts';
 
-const EditableMarkdown = lazy(() => import("./EditableMarkdown.tsx"));
+const EditableMarkdown = lazy(() => import('./EditableMarkdown.tsx'));
 
-const getPathFromHash = () => decodeURIComponent(window.location.hash.replace(/^#\/?/, ""));
+const getPathFromHash = () => decodeURIComponent(window.location.hash.replace(/^#\/?/, ''));
 
 const navigateTo = (path: string, replace = false) => {
   const hash = `#/${encodeURI(path)}`;
   if (replace) {
-    window.history.replaceState(null, "", hash);
-    window.dispatchEvent(new HashChangeEvent("hashchange"));
+    window.history.replaceState(null, '', hash);
+    window.dispatchEvent(new HashChangeEvent('hashchange'));
   } else {
     window.location.hash = hash;
   }
@@ -61,11 +57,11 @@ const navigateTo = (path: string, replace = false) => {
 
 const normalizeSearchText = (value: string) => value.toLocaleLowerCase();
 
-type SaveIssue = Extract<SaveStatus, "conflict" | "error">;
+type SaveIssue = Extract<SaveStatus, 'conflict' | 'error'>;
 
 const saveIssueLabel: Record<SaveIssue, string> = {
-  conflict: "Conflict",
-  error: "Save failed",
+  conflict: 'Conflict',
+  error: 'Save failed',
 };
 
 function NavigationItem({
@@ -77,17 +73,17 @@ function NavigationItem({
   document: MeetingDocument;
   onNavigate: () => void;
 }) {
-  const title = document.title.replace(/^\d+\.\s*/, "");
+  const title = document.title.replace(/^\d+\.\s*/, '');
 
   return (
     <button
-      aria-current={active ? "page" : undefined}
-      className={`navigation-item${active ? " active" : ""}`}
+      aria-current={active ? 'page' : undefined}
+      className={`navigation-item${active ? ' active' : ''}`}
       onClick={onNavigate}
       type="button"
     >
       {document.number !== null ? (
-        <span className="navigation-number">{String(document.number).padStart(2, "0")}</span>
+        <span className="navigation-number">{String(document.number).padStart(2, '0')}</span>
       ) : (
         <span className="navigation-dot" />
       )}
@@ -152,17 +148,17 @@ function CollapsibleNavigationSection({
 
 function App() {
   const [activePath, setActivePath] = useState(getPathFromHash);
-  const [documents, setDocuments] = useState<MeetingDocument[]>([]);
+  const [documents, setDocuments] = useState<Array<MeetingDocument>>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [deletedActivePath, setDeletedActivePath] = useState<string | null>(null);
   const [closeBlockedError, setCloseBlockedError] = useState<string | null>(null);
-  const [documentPaletteScope, setDocumentPaletteScope] = useState<"all" | "files" | null>(null);
+  const [documentPaletteScope, setDocumentPaletteScope] = useState<'all' | 'files' | null>(null);
   const [workspaceMetadataError, setWorkspaceMetadataError] = useState<string | null>(null);
   const [workspacePath, setWorkspacePath] = useState<string | null | undefined>(undefined);
   const [workspaceSelectionPending, setWorkspaceSelectionPending] = useState(false);
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
   const [orphanedRecoveryDraft, setOrphanedRecoveryDraft] = useState<RecoveryDraft | null>(null);
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState('');
   const [saveIssue, setSaveIssue] = useState<SaveIssue | null>(null);
   const [initialLayout] = useState(readWindowLayout);
   const [sectionExpanded, setSectionExpanded] = useState(initialLayout.sectionExpanded);
@@ -189,7 +185,7 @@ function App() {
     reconcileDeletedDocumentNavigation(deletedActivePath, activePath);
 
   useLayoutEffect(() => {
-    persistWindowLayout({ sidebarCollapsed, sidebarWidth, sectionExpanded }, activeDocument?.path);
+    persistWindowLayout({ sectionExpanded, sidebarCollapsed, sidebarWidth }, activeDocument?.path);
   }, [sidebarCollapsed, sidebarWidth, sectionExpanded, activeDocument?.path]);
 
   const toggleSidebar = useCallback(() => {
@@ -203,7 +199,7 @@ function App() {
     }
 
     return documents.filter((document) =>
-      normalizeSearchText(`${document.title}\n${document.cue ?? ""}\n${document.content}`).includes(
+      normalizeSearchText(`${document.title}\n${document.cue ?? ''}\n${document.content}`).includes(
         normalizedQuery,
       ),
     );
@@ -212,7 +208,7 @@ function App() {
   const navigateAfterDocumentDeletion = useCallback((path: string) => {
     const fallback =
       documentsRef.current.find(
-        (document) => document.path === "docs/todo.md" && document.path !== path,
+        (document) => document.path === 'docs/todo.md' && document.path !== path,
       ) ?? documentsRef.current.find((document) => document.path !== path);
     if (fallback) {
       navigateTo(fallback.path);
@@ -255,7 +251,7 @@ function App() {
       .catch((error: unknown) => {
         initialLoadPendingRef.current = false;
         if (!cancelled) {
-          setLoadError(error instanceof Error ? error.message : "Failed to load documents.");
+          setLoadError(error instanceof Error ? error.message : 'Failed to load documents.');
         }
       });
     return () => {
@@ -275,12 +271,12 @@ function App() {
       return;
     }
     if (orphanedRecoveryDraft) {
-      setLoadError("Restore or discard the recovered text before switching workspaces.");
+      setLoadError('Restore or discard the recovered text before switching workspaces.');
       return;
     }
     const canNavigate = await (editorRef.current?.flush() ?? Promise.resolve(true));
     if (!canNavigate) {
-      setLoadError("Resolve the current save issue before switching workspaces.");
+      setLoadError('Resolve the current save issue before switching workspaces.');
       return;
     }
     setWorkspaceSelectionPending(true);
@@ -291,7 +287,7 @@ function App() {
         window.location.reload();
       }
     } catch (error) {
-      setLoadError(error instanceof Error ? error.message : "Failed to open the workspace.");
+      setLoadError(error instanceof Error ? error.message : 'Failed to open the workspace.');
     } finally {
       setWorkspaceSelectionPending(false);
     }
@@ -303,12 +299,12 @@ function App() {
     }
     const onBeforeUnload = (event: BeforeUnloadEvent) => {
       event.preventDefault();
-      event.returnValue = "";
+      event.returnValue = '';
       window.meetings?.cancelClose?.();
-      setCloseBlockedError("Restore or discard the recovered text before closing this window.");
+      setCloseBlockedError('Restore or discard the recovered text before closing this window.');
     };
-    window.addEventListener("beforeunload", onBeforeUnload);
-    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, [orphanedRecoveryDraft]);
 
   useEffect(() => {
@@ -355,7 +351,7 @@ function App() {
       subscribeToWorkspaceMetadataChanges((change) => {
         metadataRevisionRef.current += 1;
         if (!change.metadata) {
-          setWorkspaceMetadataError(change.error ?? "Failed to load workspace metadata.");
+          setWorkspaceMetadataError(change.error ?? 'Failed to load workspace metadata.');
           return;
         }
 
@@ -379,6 +375,8 @@ function App() {
     if (!abandonedDeletedPath) {
       return;
     }
+    // Keep a deleted document's draft until navigation has moved away from it.
+    // eslint-disable-next-line react/set-state-in-effect
     setDocuments((current) => current.filter((document) => document.path !== abandonedDeletedPath));
     setDeletedActivePath((current) => (current === abandonedDeletedPath ? null : current));
   }, [abandonedDeletedPath]);
@@ -390,8 +388,8 @@ function App() {
       setMobileNavigationOpen(false);
     };
 
-    window.addEventListener("hashchange", updatePath);
-    return () => window.removeEventListener("hashchange", updatePath);
+    window.addEventListener('hashchange', updatePath);
+    return () => window.removeEventListener('hashchange', updatePath);
   }, []);
 
   useEffect(() => {
@@ -408,7 +406,7 @@ function App() {
       const commandKey = event.metaKey || event.ctrlKey;
       const key = event.key.toLocaleLowerCase();
 
-      if (commandKey && key === "s") {
+      if (commandKey && key === 's') {
         event.preventDefault();
         event.stopPropagation();
         void editorRef.current?.formatAndSave();
@@ -422,11 +420,11 @@ function App() {
         return;
       }
 
-      if (commandKey && !event.altKey && !event.shiftKey && (key === "k" || key === "p")) {
+      if (commandKey && !event.altKey && !event.shiftKey && (key === 'k' || key === 'p')) {
         event.preventDefault();
         event.stopImmediatePropagation();
         setMobileNavigationOpen(false);
-        const scope = key === "p" ? "files" : "all";
+        const scope = key === 'p' ? 'files' : 'all';
         setDocumentPaletteScope((current) => (current === scope ? null : scope));
         return;
       }
@@ -434,10 +432,10 @@ function App() {
       const target = event.target as HTMLElement | null;
       const editorHasFocus = Boolean(
         target?.isContentEditable ||
-        target?.closest(".mdxeditor, .cm-editor, input, textarea, select"),
+        target?.closest('.mdxeditor, .cm-editor, input, textarea, select'),
       );
 
-      if (event.key === "Escape") {
+      if (event.key === 'Escape') {
         setDocumentPaletteScope(null);
         setMobileNavigationOpen(false);
         if (!editorHasFocus) {
@@ -446,8 +444,8 @@ function App() {
       }
     };
 
-    window.addEventListener("keydown", onKeyDown, { capture: true });
-    return () => window.removeEventListener("keydown", onKeyDown, { capture: true });
+    window.addEventListener('keydown', onKeyDown, { capture: true });
+    return () => window.removeEventListener('keydown', onKeyDown, { capture: true });
   }, [toggleSidebar]);
 
   const handleStoredChange = (storedDocument: StoredDocument) => {
@@ -497,7 +495,7 @@ function App() {
   const handleCreateDocument = async (request: CreateDocumentRequest) => {
     const canNavigate = await (editorRef.current?.flush() ?? Promise.resolve(true));
     if (!canNavigate) {
-      throw new Error("Resolve the current save issue before creating another document.");
+      throw new Error('Resolve the current save issue before creating another document.');
     }
     const storedDocument = await createDocument(request);
     setDocuments((current) => replaceDocument(current, storedDocument, peoplePathsRef.current));
@@ -511,7 +509,7 @@ function App() {
   ) => {
     const canNavigate = await (editorRef.current?.flush() ?? Promise.resolve(true));
     if (!canNavigate) {
-      throw new Error("Resolve the current save issue before deleting this document.");
+      throw new Error('Resolve the current save issue before deleting this document.');
     }
     intentionalDocumentDeletionsRef.current.add(path);
     try {
@@ -526,20 +524,20 @@ function App() {
     if (activePathRef.current === path) {
       navigateAfterDocumentDeletion(path);
     }
-    window.setTimeout(() => intentionalDocumentDeletionsRef.current.delete(path), 2_000);
+    window.setTimeout(() => intentionalDocumentDeletionsRef.current.delete(path), 2000);
   };
 
   const handleDeleteDocument = async (path: string) => {
     if (!documentsRef.current.some((document) => document.path === path)) {
-      throw new Error("This document is no longer available.");
+      throw new Error('This document is no longer available.');
     }
     await performDocumentDeletion(path, () => deleteStoredDocument(path));
   };
 
   const handleCompleteInterview = async (path: string) => {
     const interview = documentsRef.current.find((document) => document.path === path);
-    if (interview?.group !== "Interviews") {
-      throw new Error("Only an active interview can be completed here.");
+    if (interview?.group !== 'Interviews') {
+      throw new Error('Only an active interview can be completed here.');
     }
     await performDocumentDeletion(path, () => completeInterview(path));
   };
@@ -551,8 +549,8 @@ function App() {
           <div className="workspace-guide-card">
             <h1>Choose your notes workspace</h1>
             <p>
-              Notes creates a markdown workspace for you. Choose an existing workspace or start
-              with an empty folder.
+              Notes creates a markdown workspace for you. Choose an existing workspace or start with
+              an empty folder.
             </p>
             {loadError ? <p className="workspace-guide-error">{loadError}</p> : null}
             <button
@@ -561,7 +559,7 @@ function App() {
               onClick={() => void handleChooseWorkspace()}
               type="button"
             >
-              {workspaceSelectionPending ? "Opening…" : "Choose Workspace…"}
+              {workspaceSelectionPending ? 'Opening…' : 'Choose Workspace…'}
             </button>
             <small>You can switch later with File → Open Workspace… or ⌘O.</small>
           </div>
@@ -577,7 +575,7 @@ function App() {
             <p>This workspace is empty. Start with a regular Markdown document.</p>
             <button
               className="workspace-guide-button"
-              onClick={() => void handleCreateDocument({ kind: "doc", title: "Notes" })}
+              onClick={() => void handleCreateDocument({ kind: 'doc', title: 'Notes' })}
               type="button"
             >
               Create Notes
@@ -588,17 +586,17 @@ function App() {
     }
     return (
       <main className="app-state">
-        <h1>{loadError ? "Could not load notes" : "Loading notes"}</h1>
+        <h1>{loadError ? 'Could not load notes' : 'Loading notes'}</h1>
         {loadError ? <p>{loadError}</p> : null}
       </main>
     );
   }
 
-  const docsDocuments = filteredDocuments.filter((document) => document.group === "Docs");
-  const groups = ["Interviews", "Meetings Overview", "Upcoming Meetings", "People"] as const;
+  const docsDocuments = filteredDocuments.filter((document) => document.group === 'Docs');
+  const groups = ['Interviews', 'Meetings Overview', 'Upcoming Meetings', 'People'] as const;
   const forceSectionsExpanded = Boolean(query.trim());
-  const reportDocuments = filteredDocuments.filter((document) => document.group === "Reports");
-  const archivedDocuments = filteredDocuments.filter((document) => document.group === "Archive");
+  const reportDocuments = filteredDocuments.filter((document) => document.group === 'Reports');
+  const archivedDocuments = filteredDocuments.filter((document) => document.group === 'Archive');
 
   const resolveLink = (href: string) => {
     const resolved = resolveMarkdownPath(activeDocument.path, href);
@@ -607,7 +605,7 @@ function App() {
 
   return (
     <div
-      className={`app-shell${sidebarCollapsed ? " sidebar-collapsed" : ""}${mobileNavigationOpen ? " mobile-navigation-open" : ""}${documentPaletteScope ? " document-palette-open" : ""}`}
+      className={`app-shell${sidebarCollapsed ? ' sidebar-collapsed' : ''}${mobileNavigationOpen ? ' mobile-navigation-open' : ''}${documentPaletteScope ? ' document-palette-open' : ''}`}
       style={
         sidebarCollapsed
           ? undefined
@@ -616,7 +614,7 @@ function App() {
             }
       }
     >
-      <aside className={`sidebar${mobileNavigationOpen ? " mobile-open" : ""}`}>
+      <aside className={`sidebar${mobileNavigationOpen ? ' mobile-open' : ''}`}>
         <header className="sidebar-header" />
 
         <label className="search">
@@ -646,10 +644,10 @@ function App() {
           <CollapsibleNavigationSection
             activeDocument={activeDocument}
             documents={reportDocuments}
-            expanded={sectionExpanded.Reports ?? activeDocument.group === "Reports"}
+            expanded={sectionExpanded.Reports ?? activeDocument.group === 'Reports'}
             forceExpanded={forceSectionsExpanded}
             label="Reports"
-            onExpandedChange={(expanded) => handleSectionExpandedChange("Reports", expanded)}
+            onExpandedChange={(expanded) => handleSectionExpandedChange('Reports', expanded)}
             onNavigate={(path) => void handleNavigate(path)}
           />
           {groups.map((group) => (
@@ -667,10 +665,10 @@ function App() {
           <CollapsibleNavigationSection
             activeDocument={activeDocument}
             documents={archivedDocuments}
-            expanded={sectionExpanded.Archive ?? activeDocument.group === "Archive"}
+            expanded={sectionExpanded.Archive ?? activeDocument.group === 'Archive'}
             forceExpanded={forceSectionsExpanded}
             label="Archive"
-            onExpandedChange={(expanded) => handleSectionExpandedChange("Archive", expanded)}
+            onExpandedChange={(expanded) => handleSectionExpandedChange('Archive', expanded)}
             onNavigate={(path) => void handleNavigate(path)}
           />
           {filteredDocuments.length === 0 ? (
@@ -680,7 +678,7 @@ function App() {
 
         <footer className="sidebar-footer">
           <span>
-            {documents.filter(({ group }) => group === "Upcoming Meetings").length} Upcoming
+            {documents.filter(({ group }) => group === 'Upcoming Meetings').length} Upcoming
           </span>
         </footer>
       </aside>
@@ -710,10 +708,10 @@ function App() {
       <main className="main">
         <header className="toolbar">
           <button
-            aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             className="sidebar-toggle-button"
             onClick={toggleSidebar}
-            title={`${sidebarCollapsed ? "Expand" : "Collapse"} sidebar (⌘⇧B)`}
+            title={`${sidebarCollapsed ? 'Expand' : 'Collapse'} sidebar (⌘⇧B)`}
             type="button"
           >
             <SidebarSimpleIcon />
@@ -747,7 +745,7 @@ function App() {
               closeBlockedError ??
               (activeDeletedPath ? (
                 <>
-                  The active file was deleted. Your current text is preserved.{" "}
+                  The active file was deleted. Your current text is preserved.{' '}
                   <button
                     onClick={() => {
                       void editorRef.current?.restoreDeletedDocument().then((restored) => {
@@ -769,7 +767,7 @@ function App() {
 
         {orphanedRecoveryDraft ? (
           <div className="load-error" role="alert">
-            Recovered unsaved text for a file that no longer exists: {orphanedRecoveryDraft.path}.{" "}
+            Recovered unsaved text for a file that no longer exists: {orphanedRecoveryDraft.path}.{' '}
             <button
               onClick={() => {
                 void restoreDocument({
@@ -786,14 +784,14 @@ function App() {
                   })
                   .catch((error: unknown) => {
                     setLoadError(
-                      error instanceof Error ? error.message : "Failed to restore recovered text.",
+                      error instanceof Error ? error.message : 'Failed to restore recovered text.',
                     );
                   });
               }}
               type="button"
             >
               Restore recovered file
-            </button>{" "}
+            </button>{' '}
             <button
               onClick={() => {
                 clearRecoveryDraft(orphanedRecoveryDraft.path);
@@ -814,10 +812,10 @@ function App() {
               onLocalChange={handleLocalChange}
               onNavigate={(path) => void handleNavigate(path)}
               onStatusChange={(status) => {
-                if (status === "saved") {
+                if (status === 'saved') {
                   setCloseBlockedError(null);
                 }
-                setSaveIssue(status === "conflict" || status === "error" ? status : null);
+                setSaveIssue(status === 'conflict' || status === 'error' ? status : null);
               }}
               onStoredChange={handleStoredChange}
               ref={editorRef}
@@ -831,7 +829,7 @@ function App() {
         <DocumentPalette
           activeDocument={activeDocument}
           documents={documents}
-          filesOnly={documentPaletteScope === "files"}
+          filesOnly={documentPaletteScope === 'files'}
           key={documentPaletteScope}
           onClose={() => setDocumentPaletteScope(null)}
           onCompleteInterview={handleCompleteInterview}

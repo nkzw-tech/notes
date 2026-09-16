@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'vite-plus/test';
 import {
   applyStoredDocumentChanges,
   createMeetingDocument,
@@ -232,10 +232,7 @@ describe('meeting document metadata', () => {
       path: 'people/33-riley-example.md',
     };
     const before = createMeetingDocuments([storedDocument], noPeople);
-    const after = createMeetingDocuments(
-      before,
-      new Set(['people/33-riley-example.md']),
-    );
+    const after = createMeetingDocuments(before, new Set(['people/33-riley-example.md']));
 
     expect(before[0]?.group).toBe('Upcoming Meetings');
     expect(after[0]?.group).toBe('People');

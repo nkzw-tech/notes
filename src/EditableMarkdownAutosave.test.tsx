@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 
-import { act, forwardRef, useRef, useState } from 'react';
+import { act, forwardRef, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vite-plus/test';
 import { createMeetingDocument, type StoredDocument } from './content.ts';
 import { readRecoveryDraft } from './draftRecovery.ts';
 
@@ -31,11 +31,13 @@ vi.mock('@nkzw/mdx-editor/persistence', async () => {
       ref,
     ) {
       const documentId = React.useRef<string | null>(null);
+      /* eslint-disable react/immutability -- The test double exposes mutable editor state to the harness. */
       if (documentId.current !== props.document.id) {
         documentId.current = props.document.id;
         fakeEditor.content = props.document.content.replace(/\n$/, '');
       }
       fakeEditor.props = props;
+      /* eslint-enable react/immutability */
       React.useImperativeHandle(ref, () => ({
         applyExternalChange: vi.fn(),
         flush: vi.fn(async () => true),
@@ -55,10 +57,10 @@ vi.mock('@nkzw/mdx-editor/persistence', async () => {
 
 import EditableMarkdown from './EditableMarkdown.tsx';
 
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean })
-  .IS_REACT_ACT_ENVIRONMENT = true;
+(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
+  true;
 
-const roots: Root[] = [];
+const roots: Array<Root> = [];
 const storageValues = new Map<string, string>();
 
 beforeEach(() => {
@@ -98,10 +100,10 @@ describe('EditableMarkdown autosave recovery', () => {
 
     const Harness = forwardRef(function Harness() {
       const [document, setDocument] = useState(initialDocument);
-      const peoplePaths = useRef(new Set<string>());
+      const [peoplePaths] = useState(() => new Set<string>());
       return (
         <EditableMarkdown
-          document={createMeetingDocument(document, peoplePaths.current)}
+          document={createMeetingDocument(document, peoplePaths)}
           onLocalChange={vi.fn()}
           onNavigate={vi.fn()}
           onStatusChange={vi.fn()}
@@ -139,10 +141,8 @@ describe('EditableMarkdown autosave recovery', () => {
     expect(container.textContent).not.toContain(
       'Unsaved text from the previous session was recovered',
     );
-    expect(
-      container
-        .querySelector('.mdx-editor-content')
-        ?.getAttribute('contenteditable'),
-    ).toBe('true');
+    expect(container.querySelector('.mdx-editor-content')?.getAttribute('contenteditable')).toBe(
+      'true',
+    );
   });
 });

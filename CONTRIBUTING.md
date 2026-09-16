@@ -22,9 +22,12 @@ Install dependencies and run the checks:
 
 ```bash
 pnpm install
+pnpm exec vp check --fix
 pnpm test
-pnpm build
+pnpm exec vpr build
 ```
+
+Vite+ configuration lives in `vite.config.ts`. `vp check` runs formatting, the shared `@nkzw/oxlint-config` rules, and type checks; `vp test` runs the test suite. Use `pnpm exec` to run these commands without a global Vite+ installation. The dependency catalog in `pnpm-workspace.yaml` keeps Vite and Vitest aligned with Vite+. The pre-commit hook runs `vp staged` after `pnpm install` configures it.
 
 Point the development server at a workspace containing no private information:
 

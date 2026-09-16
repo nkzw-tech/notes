@@ -1,8 +1,4 @@
-import {
-  useCallback,
-  useState,
-  type PointerEvent as ReactPointerEvent,
-} from 'react';
+import { useCallback, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { clampSidebarWidth } from './sidebarWidth.ts';
 
 type UseResizableSidebarOptions = {
@@ -10,10 +6,7 @@ type UseResizableSidebarOptions = {
   readWidth: () => number;
 };
 
-export function useResizableSidebar({
-  onWidthCommit,
-  readWidth,
-}: UseResizableSidebarOptions) {
+export function useResizableSidebar({ onWidthCommit, readWidth }: UseResizableSidebarOptions) {
   const [sidebarWidth, setSidebarWidth] = useState(readWidth);
 
   const resizeSidebar = useCallback(
@@ -47,9 +40,7 @@ export function useResizableSidebar({
       };
 
       const handleMove = (moveEvent: PointerEvent) => {
-        setSidebarWidth(
-          clampSidebarWidth(moveEvent.clientX - shellRect.left),
-        );
+        setSidebarWidth(clampSidebarWidth(moveEvent.clientX - shellRect.left));
       };
 
       const handleEnd = () => {

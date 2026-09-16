@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'vite-plus/test';
 import {
   SIDEBAR_DEFAULT_WIDTH,
   SIDEBAR_MAX_WIDTH,
@@ -21,20 +21,14 @@ const createStorage = (initialValue: string | null = null) => {
 
 describe('sidebar width', () => {
   test('clamps widths to the supported range', () => {
-    expect(clampSidebarWidth(SIDEBAR_MIN_WIDTH - 50)).toBe(
-      SIDEBAR_MIN_WIDTH,
-    );
+    expect(clampSidebarWidth(SIDEBAR_MIN_WIDTH - 50)).toBe(SIDEBAR_MIN_WIDTH);
     expect(clampSidebarWidth(412.6)).toBe(413);
-    expect(clampSidebarWidth(SIDEBAR_MAX_WIDTH + 50)).toBe(
-      SIDEBAR_MAX_WIDTH,
-    );
+    expect(clampSidebarWidth(SIDEBAR_MAX_WIDTH + 50)).toBe(SIDEBAR_MAX_WIDTH);
   });
 
   test('uses the default for missing or invalid stored values', () => {
     expect(readSidebarWidth(createStorage())).toBe(SIDEBAR_DEFAULT_WIDTH);
-    expect(readSidebarWidth(createStorage('invalid'))).toBe(
-      SIDEBAR_DEFAULT_WIDTH,
-    );
+    expect(readSidebarWidth(createStorage('invalid'))).toBe(SIDEBAR_DEFAULT_WIDTH);
   });
 
   test('clamps persisted widths when reading and writing', () => {

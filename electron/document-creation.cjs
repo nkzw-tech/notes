@@ -1,16 +1,7 @@
 // @ts-check
 
 const { createHash, randomUUID } = require('node:crypto');
-const {
-  link,
-  mkdir,
-  open,
-  readFile,
-  readdir,
-  rename,
-  stat,
-  unlink,
-} = require('node:fs/promises');
+const { link, mkdir, open, readFile, readdir, rename, stat, unlink } = require('node:fs/promises');
 const { dirname, resolve } = require('node:path');
 
 const LEGACY_AGENTS_PATH = 'AGENTS.md';
@@ -20,8 +11,7 @@ const CREATION_KINDS = new Set(['doc', 'interview', 'person', 'report']);
 let pendingCreation = Promise.resolve();
 
 /** @param {string} content */
-const hashContent = (content) =>
-  createHash('sha256').update(content).digest('hex');
+const hashContent = (content) => createHash('sha256').update(content).digest('hex');
 
 /** @param {string} path */
 const syncDirectory = async (path) => {
@@ -49,9 +39,7 @@ const normalizeTitle = (value) => {
     throw new Error('Enter a document title or person name.');
   }
   if (title.length > 120) {
-    throw new Error(
-      'Document titles and person names are limited to 120 characters.',
-    );
+    throw new Error('Document titles and person names are limited to 120 characters.');
   }
   return title;
 };
@@ -82,10 +70,7 @@ const replaceHeading = (template, heading) => {
 /** @param {string} agentsContent @param {'interview' | 'person'} counter */
 const readLegacyCounter = (agentsContent, counter) => {
   const label = counter === 'person' ? 'person' : 'interview';
-  const pattern = new RegExp(
-    `^- \\*\\*Next ${label} number:\\*\\*[ \\t]*(\\d+)[ \\t]*$`,
-    'm',
-  );
+  const pattern = new RegExp(`^- \\*\\*Next ${label} number:\\*\\*[ \\t]*(\\d+)[ \\t]*$`, 'm');
   const match = agentsContent.match(pattern);
   return match ? Number(match[1]) : null;
 };
@@ -119,8 +104,7 @@ const parseWorkspaceSettings = (content) => {
 };
 
 /** @param {{nextInterviewNumber: number; nextPersonNumber: number}} settings */
-const serializeWorkspaceSettings = (settings) =>
-  `${JSON.stringify(settings, null, 2)}\n`;
+const serializeWorkspaceSettings = (settings) => `${JSON.stringify(settings, null, 2)}\n`;
 
 /** @param {string} root @param {'interview' | 'person'} counter */
 const readExistingMaximum = async (root, counter) => {
@@ -129,9 +113,7 @@ const readExistingMaximum = async (root, counter) => {
       withFileTypes: true,
     });
     return entries.reduce((maximum, entry) => {
-      const number = entry.isFile()
-        ? Number(entry.name.match(/^(\d+)-/)?.[1] ?? 0)
-        : 0;
+      const number = entry.isFile() ? Number(entry.name.match(/^(\d+)-/)?.[1] ?? 0) : 0;
       return Math.max(maximum, number);
     }, 0);
   }
@@ -141,27 +123,17 @@ const readExistingMaximum = async (root, counter) => {
     readdir(resolve(root, 'reports'), { withFileTypes: true }),
   ]);
   let maximum = peopleEntries.reduce((current, entry) => {
-    const number = entry.isFile()
-      ? Number(entry.name.match(/^(\d+)-/)?.[1] ?? 0)
-      : 0;
+    const number = entry.isFile() ? Number(entry.name.match(/^(\d+)-/)?.[1] ?? 0) : 0;
     return Math.max(current, number);
   }, 0);
   const reportNumbers = await Promise.all(
     reportEntries
       .filter(
-        (entry) =>
-          entry.isFile() &&
-          !entry.name.startsWith('.') &&
-          !entry.name.startsWith('_'),
+        (entry) => entry.isFile() && !entry.name.startsWith('.') && !entry.name.startsWith('_'),
       )
       .map(async (entry) => {
-        const content = await readFile(
-          resolve(root, 'reports', entry.name),
-          'utf8',
-        );
-        return Number(
-          content.match(/^\*\*Person number:\*\*[ \t]*(\d+)[ \t]*$/m)?.[1] ?? 0,
-        );
+        const content = await readFile(resolve(root, 'reports', entry.name), 'utf8');
+        return Number(content.match(/^\*\*Person number:\*\*[ \t]*(\d+)[ \t]*$/m)?.[1] ?? 0);
       }),
   );
   for (const number of reportNumbers) {
@@ -202,8 +174,7 @@ const readLegacyWorkspaceSettings = async (root) => {
     }
   }
   return {
-    nextInterviewNumber:
-      readLegacyCounter(agentsContent, 'interview') ?? 1,
+    nextInterviewNumber: readLegacyCounter(agentsContent, 'interview') ?? 1,
     nextPersonNumber: readLegacyCounter(agentsContent, 'person') ?? 1,
   };
 };
@@ -225,9 +196,7 @@ const readWorkspaceSettingsState = async (root) => {
   }
 
   await mkdir(dirname(absolutePath), { recursive: true });
-  const content = serializeWorkspaceSettings(
-    await readLegacyWorkspaceSettings(root),
-  );
+  const content = serializeWorkspaceSettings(await readLegacyWorkspaceSettings(root));
   try {
     await createFileExclusively(absolutePath, content);
   } catch (error) {
@@ -246,10 +215,7 @@ const readWorkspaceSettingsState = async (root) => {
 /** @param {string} root */
 const readInterviewQuestions = async (root) => {
   try {
-    return await readFile(
-      resolve(root, 'interviews', '_behavioral.md'),
-      'utf8',
-    );
+    return await readFile(resolve(root, 'interviews', '_behavioral.md'), 'utf8');
   } catch (error) {
     if (/** @type {NodeJS.ErrnoException} */ (error).code !== 'ENOENT') {
       throw error;
@@ -263,11 +229,7 @@ const readInterviewQuestions = async (root) => {
  * @param {string} content
  * @param {string} expectedContent
  */
-const replaceFileAtomically = async (
-  absolutePath,
-  content,
-  expectedContent,
-) => {
+const replaceFileAtomically = async (absolutePath, content, expectedContent) => {
   const temporaryPath = resolve(
     dirname(absolutePath),
     `.${absolutePath.split('/').at(-1)}.${process.pid}.${randomUUID()}.tmp`,
@@ -311,32 +273,18 @@ const readStoredDocument = async (root, path) => {
 /**
  * @param {{kind: 'doc' | 'interview' | 'person' | 'report'; root: string; title: string}} request
  */
-const createWorkspaceDocumentUnlocked = async ({
-  kind,
-  root,
-  title: rawTitle,
-}) => {
+const createWorkspaceDocumentUnlocked = async ({ kind, root, title: rawTitle }) => {
   if (!CREATION_KINDS.has(kind)) {
     throw new Error(`Invalid document kind: ${kind}`);
   }
   const title = normalizeTitle(rawTitle);
   const slug = slugifyTitle(title);
   const counter =
-    kind === 'interview'
-      ? 'interview'
-      : kind === 'person' || kind === 'report'
-        ? 'person'
-        : null;
-  const counterState = counter
-    ? await readWorkspaceSettingsState(root)
-    : null;
-  const counterKey =
-    counter === 'interview' ? 'nextInterviewNumber' : 'nextPersonNumber';
+    kind === 'interview' ? 'interview' : kind === 'person' || kind === 'report' ? 'person' : null;
+  const counterState = counter ? await readWorkspaceSettingsState(root) : null;
+  const counterKey = counter === 'interview' ? 'nextInterviewNumber' : 'nextPersonNumber';
   const number = counter
-    ? Math.max(
-        counterState.settings[counterKey],
-        (await readExistingMaximum(root, counter)) + 1,
-      )
+    ? Math.max(counterState.settings[counterKey], (await readExistingMaximum(root, counter)) + 1)
     : null;
 
   let path;
@@ -353,17 +301,11 @@ const createWorkspaceDocumentUnlocked = async ({
     content = `${replaceHeading(template, `# ${number}. ${title}`).trimEnd()}\n\n${behavioral}`;
   } else if (kind === 'person') {
     path = `people/${String(number).padStart(2, '0')}-${slug}.md`;
-    const template = await readFile(
-      resolve(root, 'people', '_template.md'),
-      'utf8',
-    );
+    const template = await readFile(resolve(root, 'people', '_template.md'), 'utf8');
     content = replaceHeading(template, `# ${number}. ${title}`);
   } else {
     path = `reports/${slug}.md`;
-    const template = await readFile(
-      resolve(root, 'reports', '_template.md'),
-      'utf8',
-    );
+    const template = await readFile(resolve(root, 'reports', '_template.md'), 'utf8');
     content = replaceHeading(template, `# ${title}`).replace(
       /(^\*\*Person number:\*\*[ \t]*)\d+([ \t]*$)/m,
       `$1${number}$2`,

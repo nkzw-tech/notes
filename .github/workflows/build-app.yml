@@ -3,7 +3,7 @@ name: build-app
 on:
   push:
     tags:
-      - "v*"
+      - 'v*'
   workflow_dispatch:
     inputs:
       release_tag:
@@ -94,8 +94,11 @@ jobs:
       - name: Install Node Dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Check Source
+        run: pnpm exec vp check
+
       - name: Build Renderer
-        run: pnpm build
+        run: pnpm exec vp build
 
       - name: Build Linux App
         timeout-minutes: 45
@@ -158,8 +161,11 @@ jobs:
       - name: Install Node Dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Check Source
+        run: pnpm exec vp check
+
       - name: Build Renderer
-        run: pnpm build
+        run: pnpm exec vp build
 
       - name: Build Windows App
         shell: bash

@@ -2,9 +2,7 @@ const SIDEBAR_COLLAPSED_STORAGE_KEY = 'notes.sidebar.collapsed';
 
 type SidebarVisibilityStorage = Pick<Storage, 'getItem' | 'setItem'>;
 
-export const readSidebarCollapsed = (
-  storage: SidebarVisibilityStorage = localStorage,
-): boolean => {
+export const readSidebarCollapsed = (storage: SidebarVisibilityStorage = localStorage): boolean => {
   try {
     return storage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY) === 'true';
   } catch {
@@ -24,10 +22,7 @@ export const writeSidebarCollapsed = (
 };
 
 export const isSidebarToggleShortcut = (
-  event: Pick<
-    KeyboardEvent,
-    'altKey' | 'ctrlKey' | 'key' | 'metaKey' | 'shiftKey'
-  >,
+  event: Pick<KeyboardEvent, 'altKey' | 'ctrlKey' | 'key' | 'metaKey' | 'shiftKey'>,
 ) =>
   !event.altKey &&
   event.shiftKey &&

@@ -22,7 +22,7 @@
     system-ui,
     -apple-system,
     BlinkMacSystemFont,
-    "Segoe UI",
+    'Segoe UI',
     sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -62,7 +62,7 @@ html {
   background: var(--app-bg);
 }
 
-html[data-meetings-platform="darwin"] {
+html[data-meetings-platform='darwin'] {
   background: transparent;
 }
 
@@ -75,7 +75,7 @@ body {
   overflow: hidden;
 }
 
-html[data-meetings-platform="darwin"] body {
+html[data-meetings-platform='darwin'] body {
   background: transparent;
 }
 
@@ -163,7 +163,7 @@ svg {
   z-index: 20;
 }
 
-html[data-meetings-platform="darwin"] .sidebar {
+html[data-meetings-platform='darwin'] .sidebar {
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
   background: var(--sidebar-vibrancy-tint);
@@ -179,7 +179,7 @@ html[data-meetings-platform="darwin"] .sidebar {
 
 .sidebar-resizer::before {
   background: transparent;
-  content: "";
+  content: '';
   inset: 0 -4px;
   position: absolute;
 }
@@ -187,7 +187,7 @@ html[data-meetings-platform="darwin"] .sidebar {
 .sidebar-resizer:hover::after,
 .sidebar-resizer.dragging::after {
   background: color-mix(in srgb, var(--focus) 60%, transparent);
-  content: "";
+  content: '';
   inset: 0 4px 0 -3px;
   position: absolute;
   transition: background 120ms ease;
@@ -201,15 +201,15 @@ html[data-meetings-platform="darwin"] .sidebar {
   padding: 0 14px;
 }
 
-html[data-meetings-platform="darwin"] .sidebar-header {
+html[data-meetings-platform='darwin'] .sidebar-header {
   -webkit-app-region: drag;
   padding-left: 78px;
 }
 
-html[data-meetings-platform="darwin"] button,
-html[data-meetings-platform="darwin"] input,
-html[data-meetings-platform="darwin"] summary,
-html[data-meetings-platform="darwin"] a {
+html[data-meetings-platform='darwin'] button,
+html[data-meetings-platform='darwin'] input,
+html[data-meetings-platform='darwin'] summary,
+html[data-meetings-platform='darwin'] a {
   -webkit-app-region: no-drag;
 }
 
@@ -484,11 +484,11 @@ html[data-meetings-platform="darwin"] a {
   z-index: 10;
 }
 
-html[data-meetings-platform="darwin"] .toolbar {
+html[data-meetings-platform='darwin'] .toolbar {
   -webkit-app-region: drag;
 }
 
-html[data-meetings-platform="darwin"] .app-shell.document-palette-open .toolbar {
+html[data-meetings-platform='darwin'] .app-shell.document-palette-open .toolbar {
   -webkit-app-region: no-drag;
 }
 
@@ -572,7 +572,7 @@ html[data-meetings-platform="darwin"] .app-shell.document-palette-open .toolbar 
 .save-status::before {
   background: currentColor;
   border-radius: 50%;
-  content: "";
+  content: '';
   corner-shape: squircle;
   height: 6px;
   margin-right: 6px;
@@ -648,7 +648,7 @@ html[data-meetings-platform="darwin"] .app-shell.document-palette-open .toolbar 
     box-shadow 180ms ease;
 }
 
-.meetings-markdown-editor .mdx-editor-content li[role="checkbox"] {
+.meetings-markdown-editor .mdx-editor-content li[role='checkbox'] {
   margin-inline-start: calc(-1rem - 6px);
   padding-left: 24px;
 }
@@ -675,11 +675,11 @@ html[data-meetings-platform="darwin"] .app-shell.document-palette-open .toolbar 
   padding: 10px 12px;
 }
 
-.mdx-editor-notice[data-kind="conflict"] {
+.mdx-editor-notice[data-kind='conflict'] {
   border-color: color-mix(in srgb, var(--accent) 38%, transparent);
 }
 
-.mdx-editor-notice[data-kind="error"] {
+.mdx-editor-notice[data-kind='error'] {
   border-color: rgb(199 68 64 / 0.35);
 }
 
@@ -1076,7 +1076,7 @@ html[data-meetings-platform="darwin"] .app-shell.document-palette-open .toolbar 
     max-width: none;
   }
 
-  html[data-meetings-platform="darwin"] .app-shell.sidebar-collapsed .toolbar {
+  html[data-meetings-platform='darwin'] .app-shell.sidebar-collapsed .toolbar {
     padding-left: 78px;
   }
 }
@@ -1086,11 +1086,11 @@ html[data-meetings-platform="darwin"] .app-shell.document-palette-open .toolbar 
     display: block;
   }
 
-  html[data-meetings-platform="darwin"] .toolbar {
+  html[data-meetings-platform='darwin'] .toolbar {
     padding-left: 78px;
   }
 
-  html[data-meetings-platform="darwin"] .app-shell.mobile-navigation-open .toolbar {
+  html[data-meetings-platform='darwin'] .app-shell.mobile-navigation-open .toolbar {
     -webkit-app-region: no-drag;
   }
 
@@ -1117,11 +1117,11 @@ html[data-meetings-platform="darwin"] .app-shell.document-palette-open .toolbar 
     width: 310px;
   }
 
-  html[data-meetings-platform="darwin"] .sidebar {
+  html[data-meetings-platform='darwin'] .sidebar {
     background: var(--app-bg);
   }
 
-  html[data-meetings-platform="darwin"] .sidebar-header {
+  html[data-meetings-platform='darwin'] .sidebar-header {
     -webkit-app-region: no-drag;
     padding-left: 78px;
   }

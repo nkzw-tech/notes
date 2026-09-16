@@ -1,7 +1,7 @@
 // @ts-check
 
-const { existsSync, watch } = require("node:fs");
-const { basename, dirname, resolve } = require("node:path");
+const { existsSync, watch } = require('node:fs');
+const { basename, dirname, resolve } = require('node:path');
 const {
   DOCUMENT_DIRECTORIES,
   DocumentConflictError,
@@ -10,12 +10,12 @@ const {
   readDocument,
   writeDocument,
   writeDocumentSync,
-} = require("./document-service.cjs");
+} = require('./document-service.cjs');
 const {
   readWorkspaceMetadataOrDefault,
   reconcileWorkspaceMetadataPaths,
   WORKSPACE_METADATA_PATH,
-} = require("./workspace-metadata.cjs");
+} = require('./workspace-metadata.cjs');
 
 // All windows on a workspace share watcher state; other workspaces are isolated.
 const createWorkspaceSession = (workspaceRoot, getWindows) => {
@@ -84,7 +84,7 @@ const createWorkspaceSession = (workspaceRoot, getWindows) => {
       knownDocumentHashes.set(path, document.hash);
       for (const window of getWindows()) {
         if (!window.isDestroyed() && !window.webContents.isDestroyed()) {
-          window.webContents.send("meetings:document-change", {
+          window.webContents.send('meetings:document-change', {
             deleted: false,
             document,
             path,
@@ -102,14 +102,14 @@ const createWorkspaceSession = (workspaceRoot, getWindows) => {
         scheduleDocumentChange(path);
         return;
       }
-      if (/** @type {NodeJS.ErrnoException} */ (error).code !== "ENOENT") {
+      if (/** @type {NodeJS.ErrnoException} */ (error).code !== 'ENOENT') {
         console.error(`Failed to publish Markdown change for ${path}: ${errorMessage(error)}`);
         return;
       }
       knownDocumentHashes.delete(path);
       for (const window of getWindows()) {
         if (!window.isDestroyed() && !window.webContents.isDestroyed()) {
-          window.webContents.send("meetings:document-change", {
+          window.webContents.send('meetings:document-change', {
             deleted: true,
             path,
           });
@@ -188,7 +188,7 @@ const createWorkspaceSession = (workspaceRoot, getWindows) => {
     }
     for (const window of getWindows()) {
       if (!window.isDestroyed() && !window.webContents.isDestroyed()) {
-        window.webContents.send("meetings:workspace-metadata-change", change);
+        window.webContents.send('meetings:workspace-metadata-change', change);
       }
     }
   };
@@ -221,7 +221,7 @@ const createWorkspaceSession = (workspaceRoot, getWindows) => {
           void reconcileWorkspaceDocuments();
         }
       });
-      watcher.on("error", (error) => {
+      watcher.on('error', (error) => {
         console.error(`Failed to watch ${directoryPath}: ${errorMessage(error)}`);
         void reconcileWorkspaceDocuments();
       });
@@ -235,7 +235,7 @@ const createWorkspaceSession = (workspaceRoot, getWindows) => {
           scheduleWorkspaceMetadataChange();
         }
       });
-      watcher.on("error", (error) => {
+      watcher.on('error', (error) => {
         console.error(`Failed to watch ${metadataDirectory}: ${errorMessage(error)}`);
         void publishWorkspaceMetadataChange(++metadataChangeGeneration);
       });
@@ -264,7 +264,7 @@ const createWorkspaceSession = (workspaceRoot, getWindows) => {
 
   const requireWorkspaceRoot = () => {
     if (!workspaceRoot) {
-      throw new Error("Choose a Notes workspace first.");
+      throw new Error('Choose a Notes workspace first.');
     }
     return workspaceRoot;
   };
@@ -296,7 +296,7 @@ const createWorkspaceSession = (workspaceRoot, getWindows) => {
         !window.webContents.isDestroyed() &&
         window.webContents !== sender
       ) {
-        window.webContents.send("meetings:document-change", {
+        window.webContents.send('meetings:document-change', {
           deleted: false,
           document,
           path: document.path,
@@ -308,7 +308,7 @@ const createWorkspaceSession = (workspaceRoot, getWindows) => {
   /** @param {{baseHash: string; content: string; path: string}} request */
   const saveDocumentSync = (request, sender) => {
     const trackedPath =
-      typeof request.path === "string" ? normalizeDocumentPath(request.path) : null;
+      typeof request.path === 'string' ? normalizeDocumentPath(request.path) : null;
     if (trackedPath) {
       beginDocumentWrite(trackedPath);
     }
@@ -319,12 +319,12 @@ const createWorkspaceSession = (workspaceRoot, getWindows) => {
       });
       rememberWrite(document);
       publishSavedDocument(document, sender);
-      return { document, status: "saved" };
+      return { document, status: 'saved' };
     } catch (error) {
       if (error instanceof DocumentConflictError) {
-        return { document: error.document, status: "conflict" };
+        return { document: error.document, status: 'conflict' };
       }
-      return { error: errorMessage(error), status: "error" };
+      return { error: errorMessage(error), status: 'error' };
     } finally {
       if (trackedPath) {
         endDocumentWrite(trackedPath);
@@ -335,7 +335,7 @@ const createWorkspaceSession = (workspaceRoot, getWindows) => {
   /** @param {{baseHash: string; content: string; path: string}} request */
   const saveDocument = async (request, sender) => {
     const trackedPath =
-      typeof request.path === "string" ? normalizeDocumentPath(request.path) : null;
+      typeof request.path === 'string' ? normalizeDocumentPath(request.path) : null;
     if (trackedPath) {
       beginDocumentWrite(trackedPath);
     }
@@ -346,12 +346,12 @@ const createWorkspaceSession = (workspaceRoot, getWindows) => {
       });
       rememberWrite(document);
       publishSavedDocument(document, sender);
-      return { document, status: "saved" };
+      return { document, status: 'saved' };
     } catch (error) {
       if (error instanceof DocumentConflictError) {
-        return { document: error.document, status: "conflict" };
+        return { document: error.document, status: 'conflict' };
       }
-      return { error: errorMessage(error), status: "error" };
+      return { error: errorMessage(error), status: 'error' };
     } finally {
       if (trackedPath) {
         endDocumentWrite(trackedPath);
