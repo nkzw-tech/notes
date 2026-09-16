@@ -1,0 +1,2 @@
+# Keep formatter input identical on macOS, Linux, and Windows.
+* text=auto eol=lf

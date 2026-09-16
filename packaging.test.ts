@@ -79,6 +79,7 @@ describe('packaged app boundaries', () => {
     expect(ignored('/reports/example.md')).toBe(true);
     expect(ignored('/.env.local')).toBe(true);
     expect(ignored('/.vite-hooks/pre-commit')).toBe(true);
+    expect(ignored('/.gitattributes')).toBe(true);
     expect(ignored('/.github/workflows/build-app.yml')).toBe(true);
     expect(ignored('/packaging.test.ts')).toBe(true);
     expect(ignored('/coverage/index.html')).toBe(true);

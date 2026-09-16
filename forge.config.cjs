@@ -90,6 +90,7 @@ module.exports = {
       /^\/\.cache(?:$|\/)/,
       /^\/\.env(?:$|[.])/,
       /^\/\.git(?:$|\/)/,
+      /^\/\.gitattributes$/,
       /^\/\.github(?:$|\/)/,
       /^\/\.gitignore$/,
       /^\/\.vite-hooks(?:$|\/)/,
