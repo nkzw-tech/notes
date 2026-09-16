@@ -2,6 +2,24 @@
 
 Notes is a local-first Markdown desktop app. Your documents live in a folder you control and are never bundled into the application.
 
+## Install
+
+On macOS 13 or newer with Apple Silicon, install with [Homebrew](https://brew.sh):
+
+```sh
+brew install --cask nkzw-tech/tap/notes
+```
+
+To update Notes, run `brew update && brew upgrade --cask nkzw-tech/tap/notes`.
+
+You can also download Notes from [GitHub Releases](https://github.com/nkzw-tech/notes/releases/latest):
+
+- **macOS (Apple Silicon):** Extract the `Notes-darwin-arm64-*.zip` archive and drag `Notes.app` to Applications.
+- **Windows (x64):** Extract the `Notes-win32-x64-*.zip` archive and run `Notes.exe`.
+- **Linux (x64):** Install the `.deb` or `.rpm` package for your distribution.
+
+## Using Notes
+
 Use <kbd>⌘</kbd><kbd>P</kbd> to search and switch between files. Use <kbd>⌘</kbd><kbd>K</kbd> for the full command palette, including file navigation and document actions. On Windows/Linux, use <kbd>Ctrl</kbd> instead of <kbd>⌘</kbd>.
 
 Open another window with **File → New Window** or <kbd>⌘</kbd><kbd>N</kbd> (<kbd>Ctrl</kbd><kbd>N</kbd> on Windows/Linux) to view notes side by side. Each window navigates independently, and saved edits update other windows on the same workspace. Concurrent edits require resolving a conflict before saving. Each window keeps its own crash recovery draft.
