@@ -303,7 +303,28 @@ export const EditableMarkdown = forwardRef<
   );
 
   return (
-    <div>
+    <div
+      className="document-scroll"
+      onMouseDown={(event) => {
+        if (event.button !== 0 || event.ctrlKey || event.target !== event.currentTarget) {
+          return;
+        }
+        const contentEditable = event.currentTarget.querySelector<HTMLElement>(
+          '.mdx-editor-content[contenteditable="true"]',
+        );
+        if (!contentEditable || event.clientY < contentEditable.getBoundingClientRect().bottom) {
+          return;
+        }
+
+        // Handle the blank space before the browser blurs the editor. Touch taps
+        // also produce mousedown, while touch scrolling leaves selection alone.
+        event.preventDefault();
+        contentEditable.focus({ preventScroll: true });
+        const selection = contentEditable.ownerDocument.getSelection();
+        selection?.selectAllChildren(contentEditable);
+        selection?.collapseToEnd();
+      }}
+    >
       {recoveryDraft ? (
         <div className="mdx-editor-notice" data-kind="conflict" role="alert">
           <span>

@@ -868,23 +868,21 @@ function App({
           </div>
         ) : null}
 
-        <div className="document-scroll" key={activeDocument.id}>
-          <EditableMarkdown
-            document={activeDocument}
-            key={activeDocument.path}
-            onLocalChange={handleLocalChange}
-            onNavigate={(path) => void handleNavigate(path)}
-            onStatusChange={(status) => {
-              if (status === 'saved') {
-                setCloseBlockedError(null);
-              }
-              setSaveIssue(status === 'conflict' || status === 'error' ? status : null);
-            }}
-            onStoredChange={handleStoredChange}
-            ref={editorRef}
-            resolveLink={resolveLink}
-          />
-        </div>
+        <EditableMarkdown
+          document={activeDocument}
+          key={activeDocument.path}
+          onLocalChange={handleLocalChange}
+          onNavigate={(path) => void handleNavigate(path)}
+          onStatusChange={(status) => {
+            if (status === 'saved') {
+              setCloseBlockedError(null);
+            }
+            setSaveIssue(status === 'conflict' || status === 'error' ? status : null);
+          }}
+          onStoredChange={handleStoredChange}
+          ref={editorRef}
+          resolveLink={resolveLink}
+        />
       </main>
 
       {documentPaletteScope ? (
