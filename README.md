@@ -51,13 +51,13 @@ In another terminal, launch Electron against the development renderer:
 pnpm dev:app
 ```
 
-Create the standalone macOS application with:
+Build the standalone application and distributable for your current platform with:
 
 ```sh
-pnpm package:app
+pnpm make
 ```
 
-The packaged app is written to `out/Notes-darwin-arm64/Notes.app`. Signing and notarization are enabled when the corresponding Apple environment variables are provided.
+On Apple Silicon, the packaged app is written to `out/Notes-darwin-arm64/Notes.app`, and its ZIP is written under `out/make/`. Use `pnpm package:app` to create only the unpacked application. Signing and notarization are enabled when the corresponding Apple environment variables are provided.
 
 Persistence changes must preserve the [save ownership rules and stress tests](docs/persistence.md). After building, `pnpm test:soak` exercises six real minutes of typing and a save-aware quit in a disposable Electron workspace.
 

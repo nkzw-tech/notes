@@ -63,15 +63,15 @@ gh release edit v0.1.0 --repo nkzw-tech/notes --draft=false --latest
 
 ## Local builds
 
-Run the matching command on the target operating system:
+Build the renderer, package the app, and create distributables for the current operating system and architecture:
 
 ```sh
-pnpm make:linux
-pnpm make:windows
-pnpm make:mac
+pnpm make
 ```
 
-Linux requires `fakeroot` and `rpm` (`sudo apt install fakeroot rpm` on Ubuntu). Linux and Windows commands target x64; the macOS command targets Apple Silicon. The artifacts are written under `out/make/`.
+Linux requires `fakeroot` and `rpm` (`sudo apt install fakeroot rpm` on Ubuntu). The artifacts are written under `out/make/`. Explicit platform commands remain available: `pnpm make:linux` and `pnpm make:windows` target x64, and `pnpm make:mac` targets Apple Silicon.
+
+Like Codiff, `pnpm forge:make` and `pnpm forge:package` run Forge directly without rebuilding the renderer. Notes routes these through its Node compatibility wrapper; `ELECTRON_FORGE_NODE` can select a compatible Node executable when the current Node is version 26 or newer.
 
 `pnpm package:app` creates an unpacked app for the current platform and architecture. On Apple Silicon it writes `out/Notes-darwin-arm64/Notes.app`. Quit a running development bundle through Notes' normal Quit command before replacing it, then reopen the rebuilt app.
 
@@ -85,7 +85,7 @@ export APPLE_PASSWORD='<app-specific-password>'
 export APPLE_TEAM_ID='<team-id>'
 # Optional: select a specific certificate if multiple identities are installed.
 export APPLE_SIGNING_IDENTITY='Developer ID Application: Example Company (<team-id>)'
-pnpm make:mac
+pnpm make
 ```
 
 Keep credentials outside the repository. `APPLE_ID`, `APPLE_PASSWORD`, and `APPLE_TEAM_ID` together enable both signing and notarization. Without `APPLE_SIGNING_IDENTITY`, signing automatically discovers a Developer ID Application certificate in the keychain; set it explicitly to choose a certificate. `APPLE_SIGNING_IDENTITY` alone enables signing without notarization. Without these variables the command produces a local development build.

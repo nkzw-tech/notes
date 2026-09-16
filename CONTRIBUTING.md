@@ -38,10 +38,12 @@ In another terminal, launch Electron against the development renderer:
 pnpm dev:app
 ```
 
-Create the packaged macOS application with:
+Build the application and distributable for your current platform with:
 
 ```bash
-pnpm package:app
+pnpm make
 ```
+
+Use `pnpm package:app` to create only the unpacked application.
 
 Changes should include focused tests. Never add personal notes or a real workspace to fixtures, snapshots, or the repository.

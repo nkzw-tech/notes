@@ -105,7 +105,7 @@ jobs:
         run: |
           rm -rf ./out
 
-          node scripts/electron-forge.cjs make --platform=linux --arch=x64
+          pnpm forge:make --platform=linux --arch=x64
           test -d ./out
 
       - name: Attach Linux App to Release
@@ -170,7 +170,7 @@ jobs:
         run: |
           rm -rf ./out
 
-          node scripts/electron-forge.cjs make --platform=win32 --arch=x64
+          pnpm forge:make --platform=win32 --arch=x64
           test -d ./out
 
       - name: Attach Windows App to Release
