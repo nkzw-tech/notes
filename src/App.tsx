@@ -549,7 +549,6 @@ function App() {
       return (
         <main className="app-state workspace-guide">
           <div className="workspace-guide-card">
-            <span className="workspace-guide-eyebrow">Welcome to Notes</span>
             <h1>Choose your notes workspace</h1>
             <p>
               Your Markdown files stay in a folder you control. Choose an existing workspace or
