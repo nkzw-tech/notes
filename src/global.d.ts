@@ -48,7 +48,7 @@ declare global {
         },
         keepalive: boolean,
       ) => Promise<SaveDocumentResult> | SaveDocumentResult;
-      updateWindowState?: (state: { activePath?: string; layout: WindowLayout }) => void;
+      updateWindowState?: (state: { activePath?: string | null; layout: WindowLayout }) => void;
     };
   }
 }

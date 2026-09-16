@@ -48,7 +48,7 @@ export const readWindowLayout = (): WindowLayout => {
   return { sectionExpanded, sidebarCollapsed, sidebarWidth };
 };
 
-export const persistWindowLayout = (layout: WindowLayout, activePath?: string) => {
+export const persistWindowLayout = (layout: WindowLayout, activePath?: string | null) => {
   if (window.meetings?.updateWindowState) {
     window.meetings.updateWindowState({ activePath, layout });
     return;

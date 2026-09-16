@@ -224,7 +224,8 @@ const buildApplicationMenu = () =>
       submenu: [
         {
           accelerator: 'CommandOrControl+N',
-          click: (_menuItem, browserWindow) => createWindow(browserWindow),
+          click: (_menuItem, browserWindow) =>
+            createWindow({ sourceWindow: browserWindow, openDocumentPicker: true }),
           label: 'New Window',
         },
         {
@@ -265,7 +266,7 @@ const buildApplicationMenu = () =>
     { role: 'windowMenu' },
   ]);
 
-const createWindow = (sourceWindow, restoredSession) => {
+const createWindow = ({ sourceWindow, restoredSession, openDocumentPicker = false } = {}) => {
   const sourceSession = sourceWindow && windowSessions.get(sourceWindow.webContents.id);
   const savedState = readWindowState(app.getPath('userData'));
   const inheritedLayout = sourceSession?.layout ?? savedState?.layout;
@@ -274,6 +275,7 @@ const createWindow = (sourceWindow, restoredSession) => {
     : {
         recoveryId: randomUUID(),
         workspaceRoot: sourceSession?.workspaceRoot ?? workspaceRoot,
+        ...(openDocumentPicker ? { activePath: null } : {}),
       };
   session.layout = normalizeWindowLayout(session.layout ?? inheritedLayout);
   if (quitSessions) {
@@ -383,9 +385,8 @@ const createWindow = (sourceWindow, restoredSession) => {
   });
   const rendererURL = process.env.ELECTRON_RENDERER_URL;
   const target = new URL(rendererURL ?? pathToFileURL(join(appRoot, 'dist/index.html')).toString());
-  const sourceURL = sourceWindow?.webContents.getURL();
-  if (sourceURL) {
-    target.hash = new URL(sourceURL).hash;
+  if (session.activePath === null) {
+    target.hash = 'new';
   } else if (session.activePath) {
     target.hash = `#/${encodeURI(session.activePath)}`;
   }
@@ -418,7 +419,9 @@ ipcMain.on('meetings:window-state', (event, state) => {
     return;
   }
   session.layout = layout;
-  if (typeof state.activePath === 'string') {
+  if (state.activePath === null) {
+    session.activePath = null;
+  } else if (typeof state.activePath === 'string') {
     const path = normalizeDocumentPath(state.activePath);
     if (path) {
       session.activePath = path;
@@ -544,7 +547,7 @@ if (squirrelStartup || !lock) {
     const openWindows = readOpenWindows(app.getPath('userData'));
     if (openWindows.length) {
       for (const session of openWindows) {
-        createWindow(undefined, session);
+        createWindow({ restoredSession: session });
       }
       if (
         explicitWorkspaceRoot &&
@@ -553,7 +556,7 @@ if (squirrelStartup || !lock) {
         createWindow();
       }
     } else {
-      createWindow(undefined, { recoveryId: 'primary', workspaceRoot });
+      createWindow({ restoredSession: { recoveryId: 'primary', workspaceRoot } });
     }
   });
   app.on('activate', () => {

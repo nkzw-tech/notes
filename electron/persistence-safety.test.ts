@@ -42,7 +42,7 @@ type WindowSession = {
   workspaceRoot: string;
   layout?: WindowLayout;
   bounds?: SavedWindowState;
-  activePath?: string;
+  activePath?: string | null;
 };
 
 type MainHarness = ReturnType<typeof loadMainHarness>;
@@ -428,7 +428,7 @@ describe('Electron persistence safety', () => {
     harness: MainHarness,
     window: MainHarness['windows'][number],
     layout: WindowLayout,
-    activePath = 'docs/todo.md',
+    activePath: string | null = 'docs/todo.md',
   ) => {
     harness.ipcListeners.get('meetings:window-state')?.(
       { sender: window.webContents },
@@ -450,6 +450,43 @@ describe('Electron persistence safety', () => {
   };
   const savedSessions = (harness: MainHarness) =>
     harness.writeOpenWindows.mock.results.at(-1)!.value as WindowSession[];
+
+  test('New Window starts in the document picker and keeps the source window unchanged', () => {
+    const harness = loadMainHarness('darwin');
+    const first = harness.windows[0]!;
+    updateView(harness, first, hiddenLayout, 'docs/example.md');
+    const second = newWindow(harness);
+    expect(second.loadURL).toHaveBeenCalledExactlyOnceWith(
+      expect.stringMatching(/\/dist\/index.html#new$/),
+    );
+    expect(readLayout(harness, second)).toEqual(hiddenLayout);
+    expect(savedSessions(harness).map(({ activePath }) => activePath)).toEqual([
+      'docs/example.md',
+      null,
+    ]);
+    const menu = getFileMenuItems(harness).find((item) => item.label === 'New Window');
+    expect(menu?.accelerator).toBe('CommandOrControl+N');
+  });
+
+  test('blank windows restore the picker until a document has been selected', () => {
+    const harness = loadMainHarness('darwin');
+    const first = harness.windows[0]!;
+    const second = newWindow(harness);
+    updateView(harness, second, hiddenLayout, null);
+    harness.appEvents.get('before-quit')?.();
+    closeWindow(harness, first);
+    closeWindow(harness, second);
+    const restarted = loadMainHarness('darwin', true, savedSessions(harness));
+    const blank = restarted.windows[1]!;
+    expect(blank.loadURL).toHaveBeenCalledWith(expect.stringMatching(/#new$/));
+    updateView(restarted, blank, hiddenLayout, 'docs/selected.md');
+    restarted.appEvents.get('before-quit')?.();
+    closeWindow(restarted, blank);
+    const selected = loadMainHarness('darwin', true, savedSessions(restarted));
+    expect(selected.windows[1]!.loadURL).toHaveBeenCalledWith(
+      expect.stringMatching(/#\/docs\/selected.md$/),
+    );
+  });
 
   test('deletion closes only the requesting window when another Notes window is open', () => {
     const harness = loadMainHarness('darwin');
@@ -616,7 +653,7 @@ describe('Electron persistence safety', () => {
     }
   });
 
-  test('Command+N opens an independent window on the same note and workspace', async () => {
+  test('Command+N opens an independent document picker in the same workspace', async () => {
     const harness = loadMainHarness('darwin');
     const newWindow = getFileMenuItems(harness).find((item) => item.label === 'New Window');
     expect(newWindow?.accelerator).toBe('CommandOrControl+N');
@@ -624,7 +661,7 @@ describe('Electron persistence safety', () => {
 
     expect(harness.windows).toHaveLength(2);
     const second = harness.windows[1]!;
-    expect(second.loadURL).toHaveBeenCalledWith(expect.stringContaining('#/docs/todo.md'));
+    expect(second.loadURL).toHaveBeenCalledWith(expect.stringMatching(/#new$/));
     await expect(
       harness.ipcHandlers.get('meetings:load-workspace')?.({ sender: second.webContents }),
     ).resolves.toMatchObject({ workspacePath: '/tmp/notes-workspace' });
@@ -641,6 +678,7 @@ describe('Electron persistence safety', () => {
       .find((item) => item.label === 'New Window')
       ?.click?.({}, undefined);
     expect(harness.windows).toHaveLength(1);
+    expect(harness.windows[0]!.loadURL).toHaveBeenCalledWith(expect.stringMatching(/#new$/));
   });
 
   test.each([false, true])(

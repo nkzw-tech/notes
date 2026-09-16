@@ -81,6 +81,65 @@ test('commits the initial note immediately without another workspace request', a
   expect(loadWorkspace).not.toHaveBeenCalled();
 });
 
+test('a new window focuses the document picker without mounting a default note', async () => {
+  window.history.replaceState(null, '', '#new');
+  await render({ initialWorkspace: workspace });
+  expect(document.querySelector('[data-editor-path]')).toBeNull();
+  expect(document.querySelector('[aria-current="page"]')).toBeNull();
+  const palette = document.querySelector('[role="dialog"]')!;
+  expect(document.activeElement).toBe(palette.querySelector('input'));
+  expect(palette.textContent).toContain('Fictional Example');
+  expect(palette.textContent).not.toMatch(/Create document|Delete document|Complete Interview/);
+  expect(window.location.hash).toBe('#new');
+  await act(async () => {
+    const navigated = new Promise((resolve) =>
+      window.addEventListener('hashchange', resolve, { once: true }),
+    );
+    [...palette.querySelectorAll('button')]
+      .find((button) => button.textContent?.includes('Fictional Example'))!
+      .click();
+    await navigated;
+  });
+  expect(document.querySelector('[data-editor-path]')?.getAttribute('data-editor-path')).toBe(
+    'docs/example.md',
+  );
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
+  expect(window.location.hash).toBe('#/docs/example.md');
+});
+
+test('dismissing a new window picker leaves it blank and allows reopening or creating', async () => {
+  window.history.replaceState(null, '', '#new');
+  await render({ initialWorkspace: workspace });
+  await act(async () => {
+    document.activeElement!.dispatchEvent(
+      new KeyboardEvent('keydown', { bubbles: true, key: 'Escape' }),
+    );
+  });
+  expect(document.querySelector('[data-editor-path]')).toBeNull();
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
+  expect(document.body.textContent).toContain('No document selected');
+  expect(window.location.hash).toBe('#new');
+  await act(async () => {
+    [...document.querySelectorAll('button')]
+      .find((button) => button.textContent === 'Open document…')!
+      .click();
+  });
+  expect(document.activeElement).toBe(document.querySelector('[role="dialog"] input'));
+  await act(async () => {
+    window.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'k', metaKey: true }));
+  });
+  const palette = document.querySelector('[role="dialog"]')!;
+  expect(palette.textContent).toContain('Create document');
+  expect(palette.textContent).not.toMatch(/Delete document|Complete Interview/);
+});
+
+test('a new window in an empty workspace offers creation without mounting an editor', async () => {
+  window.history.replaceState(null, '', '#new');
+  await render({ initialWorkspace: { ...workspace, documents: [] } });
+  expect(document.querySelector('[data-editor-path]')).toBeNull();
+  expect(document.querySelector('[role="dialog"]')?.textContent).toContain('Create document');
+});
+
 test.each(['#/docs/todo.md', '', '#/docs/missing.md'])(
   'delivers buffered startup edits to the mounted persistence owner at %s',
   async (hash) => {
@@ -98,18 +157,23 @@ test.each(['#/docs/todo.md', '', '#/docs/missing.md'])(
   },
 );
 
-test('opens the recoverable note in the first commit', async () => {
-  writeRecoveryDraft({
-    baseHash: 'example',
-    content: '# Unsaved fictional text',
-    path: 'docs/example.md',
-  });
-  await render({ initialWorkspace: workspace });
-  expect(document.querySelector('[data-editor-path]')?.getAttribute('data-editor-path')).toBe(
-    'docs/example.md',
-  );
-  expect(window.location.hash).toBe('#/docs/example.md');
-});
+test.each(['#/docs/todo.md', '#new'])(
+  'opens the recoverable note in the first commit at %s',
+  async (hash) => {
+    window.history.replaceState(null, '', hash);
+    writeRecoveryDraft({
+      baseHash: 'example',
+      content: '# Unsaved fictional text',
+      path: 'docs/example.md',
+    });
+    await render({ initialWorkspace: workspace });
+    expect(document.querySelector('[data-editor-path]')?.getAttribute('data-editor-path')).toBe(
+      'docs/example.md',
+    );
+    expect(window.location.hash).toBe('#/docs/example.md');
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+  },
+);
 
 test('shows orphaned recovery controls immediately', async () => {
   writeRecoveryDraft({

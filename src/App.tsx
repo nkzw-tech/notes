@@ -36,7 +36,10 @@ import { isSidebarToggleShortcut } from './sidebarVisibility.ts';
 import { useResizableSidebar } from './useResizableSidebar.ts';
 import { readWindowLayout, persistWindowLayout, type CollapsibleGroup } from './windowLayout.ts';
 
-const getPathFromHash = () => decodeURIComponent(window.location.hash.replace(/^#\/?/, ''));
+const getPathFromHash = () =>
+  window.location.hash === '#new'
+    ? null
+    : decodeURIComponent(window.location.hash.replace(/^#\/?/, ''));
 
 const navigateTo = (path: string, replace = false) => {
   const hash = `#/${encodeURI(path)}`;
@@ -98,7 +101,7 @@ function CollapsibleNavigationSection({
   onExpandedChange,
   onNavigate,
 }: {
-  activeDocument: MeetingDocument;
+  activeDocument: MeetingDocument | undefined;
   documents: ReadonlyArray<MeetingDocument>;
   expanded: boolean;
   forceExpanded: boolean;
@@ -128,7 +131,7 @@ function CollapsibleNavigationSection({
       <div className="collapsible-list">
         {documents.map((document) => (
           <NavigationItem
-            active={document.path === activeDocument.path}
+            active={document.path === activeDocument?.path}
             document={document}
             key={document.id}
             onNavigate={() => onNavigate(document.path)}
@@ -162,6 +165,9 @@ function App({
       return draft.path;
     }
     const requestedPath = getPathFromHash();
+    if (requestedPath === null) {
+      return null;
+    }
     return initialWorkspace
       ? (documents.find(({ path }) => path === requestedPath)?.path ??
           documents[0]?.path ??
@@ -171,7 +177,9 @@ function App({
   const [loadError, setLoadError] = useState<string | null>(initialLoadError);
   const [deletedActivePath, setDeletedActivePath] = useState<string | null>(null);
   const [closeBlockedError, setCloseBlockedError] = useState<string | null>(null);
-  const [documentPaletteScope, setDocumentPaletteScope] = useState<'all' | 'files' | null>(null);
+  const [documentPaletteScope, setDocumentPaletteScope] = useState<'all' | 'files' | null>(() =>
+    activePath === null && !readRecoveryDraft() ? (documents.length ? 'files' : 'all') : null,
+  );
   const [workspaceMetadataError, setWorkspaceMetadataError] = useState<string | null>(
     initialWorkspace?.metadataError ?? null,
   );
@@ -208,13 +216,17 @@ function App({
     () => new Map(documents.map((document) => [document.path, document])),
     [documents],
   );
-  const activeDocument = documentByPath.get(activePath) ?? documents[0];
+  const activeDocument =
+    activePath === null ? undefined : (documentByPath.get(activePath) ?? documents[0]);
   const { abandonedPath: abandonedDeletedPath, activeDeletedPath } =
     reconcileDeletedDocumentNavigation(deletedActivePath, activePath);
 
   useLayoutEffect(() => {
-    persistWindowLayout({ sectionExpanded, sidebarCollapsed, sidebarWidth }, activeDocument?.path);
-  }, [sidebarCollapsed, sidebarWidth, sectionExpanded, activeDocument?.path]);
+    persistWindowLayout(
+      { sectionExpanded, sidebarCollapsed, sidebarWidth },
+      activePath === null ? null : activeDocument?.path,
+    );
+  }, [sidebarCollapsed, sidebarWidth, sectionExpanded, activeDocument?.path, activePath]);
 
   const toggleSidebar = useCallback(() => {
     if (window.matchMedia('(max-width: 780px)').matches) {
@@ -439,8 +451,9 @@ function App({
 
   useEffect(() => {
     const updatePath = () => {
-      setActivePath(getPathFromHash());
-      setDocumentPaletteScope(null);
+      const path = getPathFromHash();
+      setActivePath(path);
+      setDocumentPaletteScope(path === null ? 'files' : null);
       setMobileNavigationOpen(false);
     };
 
@@ -601,7 +614,7 @@ function App({
     await performDocumentDeletion(path, () => completeInterview(path));
   };
 
-  if (!activeDocument) {
+  if (!activeDocument && (activePath !== null || !workspacePath || loadError)) {
     if (workspacePath === null) {
       return (
         <main className="app-state workspace-guide">
@@ -658,7 +671,7 @@ function App({
   const archivedDocuments = filteredDocuments.filter((document) => document.group === 'Archive');
 
   const resolveLink = (href: string) => {
-    const resolved = resolveMarkdownPath(activeDocument.path, href);
+    const resolved = activeDocument && resolveMarkdownPath(activeDocument.path, href);
     return resolved && documentByPath.has(resolved) ? resolved : null;
   };
 
@@ -692,7 +705,7 @@ function App({
             <section className="navigation-group docs-group">
               {docsDocuments.map((document) => (
                 <NavigationItem
-                  active={document.path === activeDocument.path}
+                  active={document.path === activeDocument?.path}
                   document={document}
                   key={document.id}
                   onNavigate={() => void handleNavigate(document.path)}
@@ -703,7 +716,7 @@ function App({
           <CollapsibleNavigationSection
             activeDocument={activeDocument}
             documents={reportDocuments}
-            expanded={sectionExpanded.Reports ?? activeDocument.group === 'Reports'}
+            expanded={sectionExpanded.Reports ?? activeDocument?.group === 'Reports'}
             forceExpanded={forceSectionsExpanded}
             label="Reports"
             onExpandedChange={(expanded) => handleSectionExpandedChange('Reports', expanded)}
@@ -713,7 +726,7 @@ function App({
             <CollapsibleNavigationSection
               activeDocument={activeDocument}
               documents={filteredDocuments.filter((document) => document.group === group)}
-              expanded={sectionExpanded[group] ?? activeDocument.group === group}
+              expanded={sectionExpanded[group] ?? activeDocument?.group === group}
               forceExpanded={forceSectionsExpanded}
               key={group}
               label={group}
@@ -724,7 +737,7 @@ function App({
           <CollapsibleNavigationSection
             activeDocument={activeDocument}
             documents={archivedDocuments}
-            expanded={sectionExpanded.Archive ?? activeDocument.group === 'Archive'}
+            expanded={sectionExpanded.Archive ?? activeDocument?.group === 'Archive'}
             forceExpanded={forceSectionsExpanded}
             label="Archive"
             onExpandedChange={(expanded) => handleSectionExpandedChange('Archive', expanded)}
@@ -791,11 +804,13 @@ function App({
           >
             <SidebarSimpleIcon />
           </button>
-          <div className="document-path" title={activeDocument.path}>
-            <span>{activeDocument.group}</span>
-            <ChevronIcon size={12} />
-            <strong>{activeDocument.title}</strong>
-          </div>
+          {activeDocument ? (
+            <div className="document-path" title={activeDocument.path}>
+              <span>{activeDocument.group}</span>
+              <ChevronIcon size={12} />
+              <strong>{activeDocument.title}</strong>
+            </div>
+          ) : null}
           <div className="toolbar-actions">
             {saveIssue ? (
               <span className={`save-status ${saveIssue}`} role="status">
@@ -871,21 +886,34 @@ function App({
           </div>
         ) : null}
 
-        <EditableMarkdown
-          document={activeDocument}
-          key={activeDocument.path}
-          onLocalChange={handleLocalChange}
-          onNavigate={(path) => void handleNavigate(path)}
-          onStatusChange={(status) => {
-            if (status === 'saved') {
-              setCloseBlockedError(null);
-            }
-            setSaveIssue(status === 'conflict' || status === 'error' ? status : null);
-          }}
-          onStoredChange={handleStoredChange}
-          ref={editorRef}
-          resolveLink={resolveLink}
-        />
+        {activeDocument ? (
+          <EditableMarkdown
+            document={activeDocument}
+            key={activeDocument.path}
+            onLocalChange={handleLocalChange}
+            onNavigate={(path) => void handleNavigate(path)}
+            onStatusChange={(status) => {
+              if (status === 'saved') {
+                setCloseBlockedError(null);
+              }
+              setSaveIssue(status === 'conflict' || status === 'error' ? status : null);
+            }}
+            onStoredChange={handleStoredChange}
+            ref={editorRef}
+            resolveLink={resolveLink}
+          />
+        ) : !documentPaletteScope ? (
+          <div className="app-state">
+            <p>No document selected</p>
+            <button
+              className="workspace-guide-button"
+              onClick={() => setDocumentPaletteScope(documents.length ? 'files' : 'all')}
+              type="button"
+            >
+              Open document…
+            </button>
+          </div>
+        ) : null}
       </main>
 
       {documentPaletteScope ? (
