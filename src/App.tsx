@@ -378,15 +378,15 @@ function App({
         initialDocumentChangesRef.current.set(change.path, change);
       }
       if (change.deleted) {
-        const intentionalDeletion = intentionalDocumentDeletionsRef.current.has(change.path);
-        if (change.path === activePathRef.current && !intentionalDeletion) {
+        // The deletion command owns closing or navigating after its disk operation finishes.
+        if (intentionalDocumentDeletionsRef.current.has(change.path)) {
+          return;
+        }
+        if (change.path === activePathRef.current) {
           setDeletedActivePath(change.path);
           return;
         }
         setDocuments((current) => current.filter((document) => document.path !== change.path));
-        if (change.path === activePathRef.current) {
-          navigateAfterDocumentDeletion(change.path);
-        }
         return;
       }
 
@@ -400,7 +400,7 @@ function App({
     };
 
     return subscribeToDocumentChanges(onDocumentChange);
-  }, [navigateAfterDocumentDeletion]);
+  }, []);
 
   useEffect(
     () =>
@@ -575,12 +575,15 @@ function App({
       throw error;
     }
     clearRecoveryDraft(path);
+    window.setTimeout(() => intentionalDocumentDeletionsRef.current.delete(path), 2000);
+    if (activePathRef.current === path && (await window.meetings?.closeWindowIfOthersOpen?.())) {
+      return;
+    }
     setDocuments((current) => current.filter((document) => document.path !== path));
     setDeletedActivePath((current) => (current === path ? null : current));
     if (activePathRef.current === path) {
       navigateAfterDocumentDeletion(path);
     }
-    window.setTimeout(() => intentionalDocumentDeletionsRef.current.delete(path), 2000);
   };
 
   const handleDeleteDocument = async (path: string) => {

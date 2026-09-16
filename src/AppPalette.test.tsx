@@ -3,6 +3,8 @@
 import { act, useImperativeHandle } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, expect, test, vi } from 'vite-plus/test';
+import { completeInterview, deleteDocument, subscribeToDocumentChanges } from './documentApi.ts';
+import { readRecoveryDraft, writeRecoveryDraft } from './draftRecovery.ts';
 import type { EditableMarkdownHandle } from './EditableMarkdown.tsx';
 
 const { flush } = vi.hoisted(() => ({ flush: vi.fn<() => Promise<boolean>>() }));
@@ -22,6 +24,8 @@ vi.mock('./EditableMarkdown.tsx', () => ({
 
 vi.mock('./documentApi.ts', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./documentApi.ts')>()),
+  completeInterview: vi.fn(),
+  deleteDocument: vi.fn(),
   loadWorkspace: vi.fn().mockResolvedValue({
     documents: [
       { content: '# ToDo\n', hash: 'todo', mtimeMs: 1, path: 'docs/todo.md' },
@@ -60,6 +64,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await act(async () => root.unmount());
+  delete window.meetings;
   document.body.replaceChildren();
   vi.clearAllMocks();
 });
@@ -158,4 +163,89 @@ test('file quick open omits interview completion and ignores modified shortcuts'
   expect(palette()!.textContent).not.toContain('Complete Interview');
   await press('k', { metaKey: true });
   expect(palette()!.textContent).toContain('Complete Interview');
+});
+
+const deletionActions = [
+  { label: 'Delete document', path: 'docs/design.md', remove: deleteDocument },
+  {
+    label: 'Complete Interview',
+    path: 'interviews/01-ada-example.md',
+    remove: completeInterview,
+  },
+];
+
+const startDeletion = async (path: string, label: string) => {
+  await act(async () => {
+    window.history.replaceState(null, '', `#/${path}`);
+    window.dispatchEvent(new HashChangeEvent('hashchange'));
+  });
+  await press('k', { metaKey: true });
+  await search(label);
+  await press('Enter');
+  await press('Enter');
+};
+
+test.each(
+  deletionActions.flatMap((action) =>
+    [true, false, undefined].map((closesWindow) => ({ ...action, closesWindow })),
+  ),
+)(
+  '$label handles a watcher event before deletion resolves (closes: $closesWindow)',
+  async ({ closesWindow, label, path, remove }) => {
+    const closeWindowIfOthersOpen = vi.fn(async () => {
+      expect(readRecoveryDraft()).toBeNull();
+      return closesWindow ?? false;
+    });
+    if (closesWindow !== undefined) {
+      Object.defineProperty(window, 'meetings', {
+        configurable: true,
+        value: { closeWindowIfOthersOpen },
+      });
+    }
+    const pending = Promise.withResolvers<{ path: string }>();
+    vi.mocked(remove).mockImplementationOnce(() => pending.promise);
+    writeRecoveryDraft({ baseHash: 'old', content: 'Fictional notes', path });
+    await startDeletion(path, label);
+    expect(flush).toHaveBeenCalledOnce();
+    expect(remove).toHaveBeenCalledWith(path);
+
+    await act(async () => {
+      vi.mocked(subscribeToDocumentChanges).mock.calls[0]![0]({ deleted: true, path });
+    });
+    expect(window.location.hash).toBe(`#/${path}`);
+    expect(closeWindowIfOthersOpen).not.toHaveBeenCalled();
+    expect(document.querySelector('[role="alert"]')).toBeNull();
+
+    await act(async () => pending.resolve({ path }));
+    expect(readRecoveryDraft()).toBeNull();
+    expect(closeWindowIfOthersOpen).toHaveBeenCalledTimes(closesWindow === undefined ? 0 : 1);
+    expect(window.location.hash).toBe(closesWindow ? `#/${path}` : '#/docs/todo.md');
+    expect(palette()).toBeNull();
+    if (!closesWindow) {
+      expect(document.querySelector('.document-path')!.textContent).toContain('ToDo');
+      expect(document.querySelector('nav')!.textContent).not.toContain(
+        path.startsWith('interviews/') ? 'Ada Example' : 'Design Notes',
+      );
+    }
+  },
+);
+
+test.each(['save', 'delete'])('a failed %s keeps the document and window open', async (failure) => {
+  const closeWindowIfOthersOpen = vi.fn().mockResolvedValue(true);
+  Object.defineProperty(window, 'meetings', {
+    configurable: true,
+    value: { closeWindowIfOthersOpen },
+  });
+  if (failure === 'save') {
+    flush.mockResolvedValueOnce(false);
+  } else {
+    vi.mocked(deleteDocument).mockRejectedValueOnce(new Error('Deletion failed.'));
+  }
+  const path = 'docs/design.md';
+  writeRecoveryDraft({ baseHash: 'old', content: 'Fictional notes', path });
+  await startDeletion(path, 'Delete document');
+  expect(closeWindowIfOthersOpen).not.toHaveBeenCalled();
+  expect(window.location.hash).toBe(`#/${path}`);
+  expect(readRecoveryDraft()?.path).toBe(path);
+  expect(palette()!.textContent).toContain(failure === 'save' ? 'save issue' : 'Deletion failed');
 });

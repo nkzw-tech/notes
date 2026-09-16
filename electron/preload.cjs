@@ -70,6 +70,7 @@ const meetings = {
   initialWindowLayout: bootstrap.layout,
   updateWindowState: (state) => ipcRenderer.send('meetings:window-state', state),
   cancelClose: () => ipcRenderer.send('meetings:cancel-close'),
+  closeWindowIfOthersOpen: () => ipcRenderer.invoke('meetings:close-window-if-others-open'),
   recoveryDraftKey: bootstrap.recoveryDraftKey,
   chooseWorkspace: () => ipcRenderer.invoke('meetings:choose-workspace'),
   completeInterview: (request) => ipcRenderer.invoke('meetings:complete-interview', request),

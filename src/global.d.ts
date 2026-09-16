@@ -20,6 +20,7 @@ declare global {
       chooseWorkspace: () => Promise<
         { canceled: true; workspacePath?: never } | { canceled: false; workspacePath: string }
       >;
+      closeWindowIfOthersOpen?: () => Promise<boolean>;
       completeInterview: (request: { path: string }) => Promise<{ path: string }>;
       createDocument: (request: {
         kind: 'doc' | 'interview' | 'person' | 'report';
