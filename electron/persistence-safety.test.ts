@@ -151,6 +151,7 @@ const loadMainHarness = (
     }
 
     center() {}
+    close = vi.fn(() => this.handlers.get('close')?.());
     destroyWebContents() {
       this.webContentsUnavailable = true;
     }
@@ -449,6 +450,31 @@ describe('Electron persistence safety', () => {
   };
   const savedSessions = (harness: MainHarness) =>
     harness.writeOpenWindows.mock.results.at(-1)!.value as WindowSession[];
+
+  test('deletion closes only the requesting window when another Notes window is open', () => {
+    const harness = loadMainHarness('darwin');
+    const first = harness.windows[0]!;
+    const second = newWindow(harness);
+    const close = harness.ipcHandlers.get('meetings:close-window-if-others-open')!;
+    expect(close({ sender: second.webContents })).toBe(true);
+    expect(second.close).toHaveBeenCalledOnce();
+    expect(first.close).not.toHaveBeenCalled();
+    // A second deletion must keep the remaining window even while the first close is pending.
+    expect(close({ sender: first.webContents })).toBe(false);
+    expect(first.close).not.toHaveBeenCalled();
+    // The normal save-aware close lifecycle still supports cancellation and retry.
+    harness.ipcListeners.get('meetings:cancel-close')?.({ sender: second.webContents });
+    expect(close({ sender: first.webContents })).toBe(true);
+  });
+
+  test('deletion keeps the last Notes window open and ignores unavailable senders', () => {
+    const harness = loadMainHarness('darwin');
+    const first = harness.windows[0]!;
+    const close = harness.ipcHandlers.get('meetings:close-window-if-others-open')!;
+    expect(close({ sender: first.webContents })).toBe(false);
+    expect(close({ sender: { id: -1 } })).toBe(false);
+    expect(first.close).not.toHaveBeenCalled();
+  });
 
   test('new windows copy the focused layout immediately and then remember changes independently', () => {
     const harness = loadMainHarness('darwin');

@@ -430,6 +430,20 @@ ipcMain.on('meetings:cancel-close', (event) => {
   closingWindowIds.delete(event.sender.id);
   cancelQuit();
 });
+ipcMain.handle('meetings:close-window-if-others-open', (event) => {
+  const windows = BrowserWindow.getAllWindows().filter(
+    (window) => !window.isDestroyed() && windowSessions.has(window.webContents.id),
+  );
+  const window = windows.find((window) => window.webContents === event.sender);
+  const anotherWindowOpen = windows.some(
+    (other) => other !== window && !closingWindowIds.has(other.webContents.id),
+  );
+  if (!window || !anotherWindowOpen) {
+    return false;
+  }
+  window.close();
+  return true;
+});
 ipcMain.handle('meetings:load-workspace', (event) =>
   sessionForSender(event.sender).loadWorkspaceSnapshot(),
 );
