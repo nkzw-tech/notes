@@ -1,8 +1,53 @@
 import { createRequire } from "node:module";
 import { readFile } from "node:fs/promises";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 
 const require = createRequire(import.meta.url);
+
+describe("macOS release signing", () => {
+  test.each([
+    { name: "local development", notarize: false, identity: undefined, signed: false },
+    {
+      name: "notarization with automatic identity",
+      notarize: true,
+      identity: undefined,
+      signed: true,
+    },
+    {
+      name: "notarization with explicit identity",
+      notarize: true,
+      identity: "Developer ID Application: Example Company (EXAMPLE123)",
+      signed: true,
+    },
+    {
+      name: "signing only",
+      notarize: false,
+      identity: "Developer ID Application: Example Company (EXAMPLE123)",
+      signed: true,
+    },
+  ])("$name", ({ notarize, identity, signed }) => {
+    const configPath = require.resolve("./forge.config.cjs");
+    vi.stubEnv("APPLE_ID", notarize ? "developer@example.com" : undefined);
+    vi.stubEnv("APPLE_PASSWORD", notarize ? "fictional-test-password" : undefined);
+    vi.stubEnv("APPLE_TEAM_ID", notarize ? "EXAMPLE123" : undefined);
+    vi.stubEnv("APPLE_SIGNING_IDENTITY", identity);
+    delete require.cache[configPath];
+
+    try {
+      const { packagerConfig } = require(configPath);
+      expect(Boolean(packagerConfig.osxNotarize)).toBe(notarize);
+      expect(Boolean(packagerConfig.osxSign)).toBe(signed);
+      if (signed) {
+        expect(packagerConfig.osxSign.identity).toBe(identity);
+        expect(packagerConfig.osxSign.continueOnError).toBe(false);
+        expect(packagerConfig.osxSign.hardenedRuntime).toBe(true);
+      }
+    } finally {
+      vi.unstubAllEnvs();
+      delete require.cache[configPath];
+    }
+  });
+});
 
 describe("packaged app boundaries", () => {
   test.each(["deb", "rpm"])("Linux %s launcher targets the packaged executable", (format) => {

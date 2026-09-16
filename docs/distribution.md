@@ -77,17 +77,18 @@ Linux requires `fakeroot` and `rpm` (`sudo apt install fakeroot rpm` on Ubuntu).
 
 ## Signed macOS release
 
-As in Codiff, macOS builds are made locally with a Developer ID certificate installed in the keychain. Set all four variables in your local shell before building:
+As in Codiff, macOS builds are made locally with a Developer ID Application certificate and its private key installed in the keychain. Set the notarization credentials in your local shell before building:
 
 ```sh
 export APPLE_ID='developer@example.com'
 export APPLE_PASSWORD='<app-specific-password>'
 export APPLE_TEAM_ID='<team-id>'
+# Optional: select a specific certificate if multiple identities are installed.
 export APPLE_SIGNING_IDENTITY='Developer ID Application: Example Company (<team-id>)'
 pnpm make:mac
 ```
 
-Keep credentials outside the repository. `APPLE_SIGNING_IDENTITY` enables signing; `APPLE_ID`, `APPLE_PASSWORD`, and `APPLE_TEAM_ID` enable notarization. Without these variables the command produces a local development build.
+Keep credentials outside the repository. `APPLE_ID`, `APPLE_PASSWORD`, and `APPLE_TEAM_ID` together enable both signing and notarization. Without `APPLE_SIGNING_IDENTITY`, signing automatically discovers a Developer ID Application certificate in the keychain; set it explicitly to choose a certificate. `APPLE_SIGNING_IDENTITY` alone enables signing without notarization. Without these variables the command produces a local development build.
 
 Build from the same release commit, then upload the matching signed ZIP to the existing release:
 

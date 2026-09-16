@@ -16,16 +16,19 @@ const osxNotarize =
         tool: "notarytool",
       }
     : undefined;
-const osxSign = process.env.APPLE_SIGNING_IDENTITY
-  ? {
-      continueOnError: false,
-      hardenedRuntime: true,
-      identity: process.env.APPLE_SIGNING_IDENTITY,
-      optionsForFile: () => ({
-        entitlements: join(__dirname, "electron/entitlements.plist"),
-      }),
-    }
-  : undefined;
+// Notarization requires a signed bundle. Let osx-sign discover the installed
+// Developer ID Application certificate when no explicit identity is provided.
+const osxSign =
+  process.env.APPLE_SIGNING_IDENTITY || osxNotarize
+    ? {
+        continueOnError: false,
+        hardenedRuntime: true,
+        identity: process.env.APPLE_SIGNING_IDENTITY,
+        optionsForFile: () => ({
+          entitlements: join(__dirname, "electron/entitlements.plist"),
+        }),
+      }
+    : undefined;
 
 /** @type {import('@electron-forge/shared-types').ForgeConfig} */
 module.exports = {
