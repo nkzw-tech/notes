@@ -56,7 +56,7 @@ export function DocumentPalette({
   onDeleteDocument,
   onNavigate,
 }: {
-  activeDocument: MeetingDocument;
+  activeDocument: MeetingDocument | undefined;
   documents: ReadonlyArray<MeetingDocument>;
   filesOnly?: boolean;
   onClose: () => void;
@@ -79,12 +79,13 @@ export function DocumentPalette({
     mode === 'browse' &&
     (!normalizedQuery || 'create document new'.includes(normalizedQuery));
   const destructiveMode =
-    activeDocument.group === 'Interviews' ? 'complete-interview' : 'delete-document';
+    activeDocument?.group === 'Interviews' ? 'complete-interview' : 'delete-document';
   const destructiveSearchText =
     destructiveMode === 'complete-interview'
       ? 'complete interview delete'
       : 'delete document remove';
   const showDestructiveAction =
+    Boolean(activeDocument) &&
     !filesOnly &&
     mode === 'browse' &&
     (!normalizedQuery || destructiveSearchText.includes(normalizedQuery));
@@ -144,7 +145,7 @@ export function DocumentPalette({
   }, [creationKind, isCreating, onClose, onCreate, query]);
 
   const completeInterviewAndClose = useCallback(async () => {
-    if (activeDocument.group !== 'Interviews' || isCreating) {
+    if (activeDocument?.group !== 'Interviews' || isCreating) {
       return;
     }
     setError(null);
@@ -163,7 +164,7 @@ export function DocumentPalette({
   }, [activeDocument, isCreating, onClose, onCompleteInterview]);
 
   const deleteDocumentAndClose = useCallback(async () => {
-    if (isCreating) {
+    if (!activeDocument || isCreating) {
       return;
     }
     setError(null);
@@ -177,7 +178,7 @@ export function DocumentPalette({
       );
       setIsCreating(false);
     }
-  }, [activeDocument.path, isCreating, onClose, onDeleteDocument]);
+  }, [activeDocument, isCreating, onClose, onDeleteDocument]);
 
   const activateIndex = useCallback(
     (index: number) => {
@@ -296,9 +297,9 @@ export function DocumentPalette({
         ? 'Choose a document type…'
         : mode === 'name'
           ? getNamePlaceholder(creationKind)
-          : mode === 'complete-interview'
-            ? `Complete ${getPaletteDocumentTitle(activeDocument)}?`
-            : `Delete ${getPaletteDocumentTitle(activeDocument)}?`;
+          : activeDocument
+            ? `${mode === 'complete-interview' ? 'Complete' : 'Delete'} ${getPaletteDocumentTitle(activeDocument)}?`
+            : '';
 
   return (
     <div className="document-palette-overlay" onClick={handleOverlayClick}>
@@ -343,7 +344,7 @@ export function DocumentPalette({
                   <span className="document-palette-group">New</span>
                 </button>
               ) : null}
-              {showDestructiveAction ? (
+              {showDestructiveAction && activeDocument ? (
                 <button
                   className={`document-palette-item document-palette-danger${clampedIndex === (showCreateAction ? 1 : 0) ? ' selected' : ''}`}
                   onClick={() => resetStep(destructiveMode)}
@@ -445,7 +446,7 @@ export function DocumentPalette({
                 Type a title or name · Backspace to go back
               </div>
             )
-          ) : (
+          ) : activeDocument ? (
             <button
               className="document-palette-item document-palette-danger selected"
               disabled={isCreating}
@@ -474,7 +475,7 @@ export function DocumentPalette({
               </span>
               <span className="document-palette-group">Delete</span>
             </button>
-          )}
+          ) : null}
           {error ? (
             <div className="document-palette-error" role="alert">
               {error}

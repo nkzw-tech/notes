@@ -39,7 +39,11 @@ const readOpenWindows = (configDir) => {
           workspaceRoot: session.workspaceRoot,
           ...(layout ? { layout } : {}),
           ...(bounds ? { bounds } : {}),
-          ...(activePath ? { activePath } : {}),
+          ...(session.activePath === null
+            ? { activePath: null }
+            : activePath
+              ? { activePath }
+              : {}),
         };
       });
   } catch {

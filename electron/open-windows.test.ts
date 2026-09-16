@@ -27,7 +27,11 @@ test('persists recovery identities until their windows close', async () => {
       layout: { sidebarCollapsed: true, sidebarWidth: 280, sectionExpanded: { People: false } },
       bounds: { x: 10, y: 20, width: 680, height: 900, isFullScreen: false, isMaximized: false },
     },
-    { recoveryId: '12345678-1234-1234-1234-123456789abc', workspaceRoot: '/tmp/notes-two' },
+    {
+      recoveryId: '12345678-1234-1234-1234-123456789abc',
+      workspaceRoot: '/tmp/notes-two',
+      activePath: null,
+    },
   ];
   writeOpenWindows(sessions, root);
   expect(readOpenWindows(root)).toEqual(sessions);
