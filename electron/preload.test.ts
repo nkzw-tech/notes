@@ -59,8 +59,7 @@ test('uses asynchronous saves normally and synchronous saves only for lifecycle 
     window: { addEventListener: vi.fn() },
   });
 
-  expect(sendSync).toHaveBeenCalledWith('meetings:recovery-key');
-  expect(sendSync).toHaveBeenCalledWith('meetings:window-layout');
+  expect(sendSync).toHaveBeenCalledExactlyOnceWith('meetings:bootstrap');
   sendSync.mockClear();
 
   const viewState = {
@@ -135,8 +134,8 @@ test.each([true, false])(
       require: () => ({
         contextBridge: { exposeInMainWorld: vi.fn() },
         ipcRenderer: {
-          sendSync: (channel: string) =>
-            channel === 'meetings:system-accent' ? '#3478f6ff' : null,
+          sendSync: () => ({ systemAccent: '#3478f6ff' }),
+          invoke: () => Promise.resolve({}),
           on: (channel: string, callback: (...args: unknown[]) => void) =>
             listeners.set(channel, callback),
         },
@@ -156,3 +155,70 @@ test.each([true, false])(
     }
   },
 );
+
+test('prefetches once and replays changes received while the renderer loads', async () => {
+  const listeners = new Map<string, (_event: unknown, change: unknown) => void>();
+  const snapshot = {
+    documents: [],
+    peoplePaths: [],
+    metadataError: null,
+    workspacePath: '/fictional',
+  };
+  const invoke = vi.fn().mockResolvedValue(snapshot);
+  const send = vi.fn();
+  let meetings!: NonNullable<Window['meetings']>;
+  vm.runInNewContext(
+    readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'preload.cjs'), 'utf8'),
+    {
+      document: { documentElement: null },
+      process,
+      window: { addEventListener: vi.fn() },
+      require: () => ({
+        contextBridge: {
+          exposeInMainWorld: (_name: string, value: typeof meetings) => {
+            meetings = value;
+          },
+        },
+        ipcRenderer: {
+          invoke,
+          send,
+          sendSync: () => ({ layout: null, recoveryDraftKey: 'fictional', systemAccent: null }),
+          on: (channel: string, callback: (_event: unknown, change: unknown) => void) =>
+            listeners.set(channel, callback),
+        },
+      }),
+    },
+  );
+  expect(invoke).toHaveBeenCalledExactlyOnceWith('meetings:load-workspace');
+  const changes = vi.fn();
+  const metadata = vi.fn();
+  const first = {
+    deleted: false,
+    path: 'docs/example.md',
+    document: { path: 'docs/example.md', content: '# First', hash: 'first', mtimeMs: 1 },
+  };
+  const latest = { ...first, document: { ...first.document, content: '# Latest', hash: 'latest' } };
+  const deleted = { deleted: true, path: 'docs/deleted.md' };
+  listeners.get('meetings:document-change')!({}, first);
+  listeners.get('meetings:document-change')!({}, latest);
+  listeners.get('meetings:document-change')!({}, deleted);
+  const metadataChange = { metadata: { peoplePaths: ['people/example.md'] } };
+  listeners.get('meetings:workspace-metadata-change')!({}, metadataChange);
+  expect(await meetings.loadWorkspace()).toBe(snapshot);
+  expect(invoke).toHaveBeenCalledTimes(1);
+  const unsubscribe = meetings.onDocumentChange(changes);
+  meetings.onWorkspaceMetadataChange(metadata);
+  expect(changes.mock.calls.map(([change]) => change)).toEqual([latest, deleted]);
+  expect(metadata).toHaveBeenCalledExactlyOnceWith(metadataChange);
+  // StrictMode resubscription must not replay already consumed events.
+  unsubscribe();
+  meetings.onDocumentChange(changes);
+  expect(changes).toHaveBeenCalledTimes(2);
+  listeners.get('meetings:document-change')!({}, first);
+  expect(changes).toHaveBeenLastCalledWith(first);
+  await meetings.loadWorkspace();
+  expect(invoke).toHaveBeenCalledTimes(2);
+  meetings.rendererReady!();
+  meetings.rendererReady!();
+  expect(send).toHaveBeenCalledExactlyOnceWith('meetings:renderer-ready');
+});

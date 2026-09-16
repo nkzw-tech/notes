@@ -63,6 +63,8 @@ On Apple Silicon, the packaged app is written to `out/Notes-darwin-arm64/Notes.a
 
 Persistence changes must preserve the [save ownership rules and stress tests](docs/persistence.md). After building, `pnpm test:soak` exercises six real minutes of typing and a save-aware quit in a disposable Electron workspace.
 
+Measure startup with `pnpm exec electron scripts/startup-benchmark.cjs 500 6` after building. It opens six real Electron windows against 500 fictional notes in a temporary workspace, reports time to editable content and whether a loading screen appeared, and quits through the save-aware lifecycle. See [Startup](docs/startup.md) for the startup path and measurement limits.
+
 ## Releases
 
 Pushing a version tag such as `v0.1.0` builds Linux x64 DEB/RPM packages and a Windows x64 portable ZIP, attaches them to a GitHub Release, and publishes it after both builds succeed. The tag must match the version in `package.json`.

@@ -1,13 +1,4 @@
-import {
-  lazy,
-  Suspense,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  useLayoutEffect,
-} from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useLayoutEffect } from 'react';
 import {
   applyStoredDocumentChanges,
   createMeetingDocuments,
@@ -27,6 +18,7 @@ import {
   subscribeToWorkspaceMetadataChanges,
   type CreateDocumentRequest,
   type DocumentChangeEvent,
+  type WorkspaceSnapshot,
 } from './documentApi.ts';
 import { DocumentPalette } from './DocumentPalette.tsx';
 import {
@@ -35,13 +27,14 @@ import {
   readRecoveryDraft,
   type RecoveryDraft,
 } from './draftRecovery.ts';
-import type { EditableMarkdownHandle, SaveStatus } from './EditableMarkdown.tsx';
+import EditableMarkdown, {
+  type EditableMarkdownHandle,
+  type SaveStatus,
+} from './EditableMarkdown.tsx';
 import { ChevronIcon, MenuIcon, SearchIcon, SidebarSimpleIcon } from './icons.tsx';
 import { isSidebarToggleShortcut } from './sidebarVisibility.ts';
 import { useResizableSidebar } from './useResizableSidebar.ts';
 import { readWindowLayout, persistWindowLayout, type CollapsibleGroup } from './windowLayout.ts';
-
-const EditableMarkdown = lazy(() => import('./EditableMarkdown.tsx'));
 
 const getPathFromHash = () => decodeURIComponent(window.location.hash.replace(/^#\/?/, ''));
 
@@ -146,18 +139,53 @@ function CollapsibleNavigationSection({
   );
 }
 
-function App() {
-  const [activePath, setActivePath] = useState(getPathFromHash);
-  const [documents, setDocuments] = useState<Array<MeetingDocument>>([]);
-  const [loadError, setLoadError] = useState<string | null>(null);
+function App({
+  initialLoadError = null,
+  initialWorkspace,
+}: {
+  initialLoadError?: string | null;
+  initialWorkspace?: WorkspaceSnapshot;
+}) {
+  const [documents, setDocuments] = useState<Array<MeetingDocument>>(() =>
+    initialWorkspace
+      ? createMeetingDocuments(initialWorkspace.documents, new Set(initialWorkspace.peoplePaths))
+      : [],
+  );
+  const [activePath, setActivePath] = useState(() => {
+    const draft = initialWorkspace && readRecoveryDraft();
+    if (
+      draft &&
+      initialWorkspace.documents.some(
+        ({ content, path }) => path === draft.path && fromStorageContent(content) !== draft.content,
+      )
+    ) {
+      return draft.path;
+    }
+    const requestedPath = getPathFromHash();
+    return initialWorkspace
+      ? (documents.find(({ path }) => path === requestedPath)?.path ??
+          documents[0]?.path ??
+          requestedPath)
+      : requestedPath;
+  });
+  const [loadError, setLoadError] = useState<string | null>(initialLoadError);
   const [deletedActivePath, setDeletedActivePath] = useState<string | null>(null);
   const [closeBlockedError, setCloseBlockedError] = useState<string | null>(null);
   const [documentPaletteScope, setDocumentPaletteScope] = useState<'all' | 'files' | null>(null);
-  const [workspaceMetadataError, setWorkspaceMetadataError] = useState<string | null>(null);
-  const [workspacePath, setWorkspacePath] = useState<string | null | undefined>(undefined);
+  const [workspaceMetadataError, setWorkspaceMetadataError] = useState<string | null>(
+    initialWorkspace?.metadataError ?? null,
+  );
+  const [workspacePath, setWorkspacePath] = useState<string | null | undefined>(
+    initialWorkspace?.workspacePath,
+  );
   const [workspaceSelectionPending, setWorkspaceSelectionPending] = useState(false);
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
-  const [orphanedRecoveryDraft, setOrphanedRecoveryDraft] = useState<RecoveryDraft | null>(null);
+  const [orphanedRecoveryDraft, setOrphanedRecoveryDraft] = useState<RecoveryDraft | null>(() => {
+    const draft = initialWorkspace && readRecoveryDraft();
+    return draft && !initialWorkspace.documents.some(({ path }) => path === draft.path)
+      ? draft
+      : null;
+  });
   const [query, setQuery] = useState('');
   const [saveIssue, setSaveIssue] = useState<SaveIssue | null>(null);
   const [initialLayout] = useState(readWindowLayout);
@@ -167,10 +195,10 @@ function App() {
   const documentsRef = useRef(documents);
   const editorRef = useRef<EditableMarkdownHandle>(null);
   const initialDocumentChangesRef = useRef(new Map<string, DocumentChangeEvent>());
-  const initialLoadPendingRef = useRef(true);
+  const initialLoadPendingRef = useRef(!initialWorkspace && !initialLoadError);
   const intentionalDocumentDeletionsRef = useRef(new Set<string>());
   const metadataRevisionRef = useRef(0);
-  const peoplePathsRef = useRef<ReadonlySet<string>>(new Set());
+  const peoplePathsRef = useRef<ReadonlySet<string>>(new Set(initialWorkspace?.peoplePaths));
   const searchRef = useRef<HTMLInputElement>(null);
   const { resizeSidebar, sidebarWidth } = useResizableSidebar({
     readWidth: () => initialLayout.sidebarWidth,
@@ -216,6 +244,24 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (initialLoadError) {
+      return;
+    }
+    if (initialWorkspace) {
+      const recoveryDraft = readRecoveryDraft();
+      if (recoveryDraft) {
+        const diskDocument = initialWorkspace.documents.find(
+          ({ path }) => path === recoveryDraft.path,
+        );
+        if (diskDocument && fromStorageContent(diskDocument.content) === recoveryDraft.content) {
+          clearRecoveryDraft(recoveryDraft.path);
+        }
+      }
+      if (activePathRef.current && getPathFromHash() !== activePathRef.current) {
+        navigateTo(activePathRef.current, true);
+      }
+      return;
+    }
     let cancelled = false;
     const metadataRevision = metadataRevisionRef.current;
     void loadWorkspace()
@@ -257,7 +303,13 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [initialLoadError, initialWorkspace]);
+
+  useEffect(() => {
+    if (workspacePath !== undefined || loadError) {
+      window.meetings?.rendererReady?.();
+    }
+  }, [workspacePath, loadError]);
 
   useEffect(() => {
     if (!window.meetings) {
@@ -805,23 +857,21 @@ function App() {
         ) : null}
 
         <div className="document-scroll" key={activeDocument.id}>
-          <Suspense fallback={<div className="editor-loading">Loading…</div>}>
-            <EditableMarkdown
-              document={activeDocument}
-              key={activeDocument.path}
-              onLocalChange={handleLocalChange}
-              onNavigate={(path) => void handleNavigate(path)}
-              onStatusChange={(status) => {
-                if (status === 'saved') {
-                  setCloseBlockedError(null);
-                }
-                setSaveIssue(status === 'conflict' || status === 'error' ? status : null);
-              }}
-              onStoredChange={handleStoredChange}
-              ref={editorRef}
-              resolveLink={resolveLink}
-            />
-          </Suspense>
+          <EditableMarkdown
+            document={activeDocument}
+            key={activeDocument.path}
+            onLocalChange={handleLocalChange}
+            onNavigate={(path) => void handleNavigate(path)}
+            onStatusChange={(status) => {
+              if (status === 'saved') {
+                setCloseBlockedError(null);
+              }
+              setSaveIssue(status === 'conflict' || status === 'error' ? status : null);
+            }}
+            onStoredChange={handleStoredChange}
+            ref={editorRef}
+            resolveLink={resolveLink}
+          />
         </div>
       </main>
 

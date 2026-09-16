@@ -269,7 +269,7 @@ const createWorkspaceSession = (workspaceRoot, getWindows) => {
     return workspaceRoot;
   };
 
-  const loadWorkspaceSnapshot = async () => {
+  const readWorkspaceSnapshot = async () => {
     if (!workspaceRoot) {
       return {
         documents: [],
@@ -287,6 +287,18 @@ const createWorkspaceSession = (workspaceRoot, getWindows) => {
       ...reconcileWorkspaceMetadataPaths(metadata, new Set(documents.map(({ path }) => path))),
       workspacePath: workspaceRoot,
     };
+  };
+
+  // Restoring several windows should scan a workspace once. Share only an
+  // in-flight read; later opens still read disk instead of using stale content.
+  let workspaceLoadInFlight = null;
+  const loadWorkspaceSnapshot = () => {
+    if (!workspaceLoadInFlight) {
+      workspaceLoadInFlight = readWorkspaceSnapshot().finally(() => {
+        workspaceLoadInFlight = null;
+      });
+    }
+    return workspaceLoadInFlight;
   };
 
   const publishSavedDocument = (document, sender) => {

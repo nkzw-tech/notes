@@ -330,7 +330,10 @@ const createWindow = (sourceWindow, restoredSession) => {
   windowSessions.set(windowWebContentsId, session);
   getWorkspaceSession(session.workspaceRoot);
   persistOpenWindows();
-  window.once('ready-to-show', () => window.show());
+  // Show the committed editor (or workspace/error screen) as the first frame.
+  // ready-to-show can fire on the empty HTML before renderer initialization.
+  window.webContents.once('did-fail-load', () => window.show());
+  window.webContents.once('render-process-gone', () => window.show());
   const rememberBounds = () => {
     if (!quitSessions) {
       session.bounds = captureWindowBounds(window);
@@ -388,11 +391,24 @@ const createWindow = (sourceWindow, restoredSession) => {
   void window.loadURL(target.toString());
 };
 
-ipcMain.on('meetings:system-accent', (event) => {
-  event.returnValue = getSystemAccent();
+ipcMain.on('meetings:bootstrap', (event) => {
+  const session = windowSessions.get(event.sender.id);
+  event.returnValue = {
+    layout: session?.layout ?? null,
+    recoveryDraftKey:
+      session?.recoveryId === 'primary'
+        ? 'notes.current-draft.v1'
+        : `notes.current-draft.v1.${session.recoveryId}.${encodeURIComponent(session.workspaceRoot)}`,
+    systemAccent: getSystemAccent(),
+  };
 });
-ipcMain.on('meetings:window-layout', (event) => {
-  event.returnValue = windowSessions.get(event.sender.id)?.layout ?? null;
+ipcMain.on('meetings:renderer-ready', (event) => {
+  const window = BrowserWindow.getAllWindows().find(
+    (window) => window.webContents === event.sender,
+  );
+  if (window && !window.isDestroyed() && !closingWindowIds.has(event.sender.id)) {
+    window.show();
+  }
 });
 ipcMain.on('meetings:window-state', (event, state) => {
   const session = windowSessions.get(event.sender.id);
@@ -412,13 +428,6 @@ ipcMain.on('meetings:window-state', (event, state) => {
 ipcMain.on('meetings:cancel-close', (event) => {
   closingWindowIds.delete(event.sender.id);
   cancelQuit();
-});
-ipcMain.on('meetings:recovery-key', (event) => {
-  const session = windowSessions.get(event.sender.id);
-  event.returnValue =
-    session?.recoveryId === 'primary'
-      ? 'notes.current-draft.v1'
-      : `notes.current-draft.v1.${session.recoveryId}.${encodeURIComponent(session.workspaceRoot)}`;
 });
 ipcMain.handle('meetings:load-workspace', (event) =>
   sessionForSender(event.sender).loadWorkspaceSnapshot(),

@@ -608,7 +608,6 @@ html[data-meetings-platform='darwin'] .app-shell.document-palette-open .toolbar 
 
 .document-scroll {
   --document-inline-padding: min(40px, max(6px, calc(3.5vw - 7px)));
-  animation: document-enter 220ms ease-out;
   background-color: transparent;
   flex: 1;
   min-height: 0;
@@ -813,30 +812,6 @@ html[data-meetings-platform='darwin'] .app-shell.document-palette-open .toolbar 
   margin-top: 14px;
 }
 
-.editor-loading {
-  align-items: center;
-  background: var(--card-bg);
-  border: 1px solid var(--card-border);
-  border-radius: 28px;
-  box-shadow:
-    0 1px 0 rgb(255 255 255 / 0.35) inset,
-    0 24px 70px -54px rgb(0 0 0 / 0.5);
-  color: var(--muted);
-  corner-shape: squircle;
-  display: flex;
-  font-style: italic;
-  justify-content: center;
-  margin: 0 auto;
-  max-width: 980px;
-  min-height: min(70vh, 720px);
-  padding: 16px;
-  transition:
-    background-color 180ms ease,
-    border-color 180ms ease,
-    border-radius 180ms ease,
-    box-shadow 180ms ease;
-}
-
 .sidebar-backdrop {
   display: none;
 }
@@ -1023,17 +998,6 @@ html[data-meetings-platform='darwin'] .app-shell.document-palette-open .toolbar 
   }
 }
 
-@keyframes document-enter {
-  from {
-    opacity: 0;
-    transform: translateY(5px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
 @keyframes mobile-close-enter {
   from {
     opacity: 0;
@@ -1062,14 +1026,6 @@ html[data-meetings-platform='darwin'] .app-shell.document-palette-open .toolbar 
   .app-shell.sidebar-collapsed .meetings-markdown-editor.mdx-editor-card .mdx-editor-content {
     --mdx-editor-padding: 22px;
     background-color: transparent;
-    border-color: transparent;
-    border-radius: 0;
-    box-shadow: none;
-    max-width: none;
-  }
-
-  .app-shell.sidebar-collapsed .editor-loading {
-    background: transparent;
     border-color: transparent;
     border-radius: 0;
     box-shadow: none;
@@ -1186,14 +1142,6 @@ html[data-meetings-platform='darwin'] .app-shell.document-palette-open .toolbar 
   .meetings-markdown-editor.mdx-editor-card .mdx-editor-content {
     --mdx-editor-padding: 22px;
     background-color: transparent;
-    border-color: transparent;
-    border-radius: 0;
-    box-shadow: none;
-    max-width: none;
-  }
-
-  .editor-loading {
-    background: transparent;
     border-color: transparent;
     border-radius: 0;
     box-shadow: none;

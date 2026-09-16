@@ -37,6 +37,7 @@ declare global {
       ) => () => void;
       readyToClose: () => void;
       recoveryDraftKey?: string;
+      rendererReady?: () => void;
       restoreDocument: (request: { content: string; path: string }) => Promise<StoredDocument>;
       saveDocument: (
         request: {

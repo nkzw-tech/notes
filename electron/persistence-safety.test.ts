@@ -113,6 +113,9 @@ const loadMainHarness = (
       handlers: new Map<string, (...arguments_: unknown[]) => void>(),
       id: FakeBrowserWindow.nextId++,
       isDestroyed: () => false,
+      once: (event: string, callback: (...arguments_: unknown[]) => void) => {
+        this.fakeWebContents.handlers.set(event, callback);
+      },
       on: (event: string, callback: (...arguments_: unknown[]) => void) => {
         this.fakeWebContents.handlers.set(event, callback);
       },
@@ -175,7 +178,7 @@ const loadMainHarness = (
     once(_event: string, _callback: (...arguments_: unknown[]) => void) {}
     restore() {}
     setFullScreen(_value: boolean) {}
-    show() {}
+    show = vi.fn();
   }
 
   const app = {
@@ -432,9 +435,12 @@ describe('Electron persistence safety', () => {
     );
   };
   const readLayout = (harness: MainHarness, window: MainHarness['windows'][number]) => {
-    const event = { sender: window.webContents, returnValue: undefined };
-    harness.ipcListeners.get('meetings:window-layout')?.(event);
-    return event.returnValue;
+    const event = {
+      sender: window.webContents,
+      returnValue: undefined as { layout: WindowLayout } | undefined,
+    };
+    harness.ipcListeners.get('meetings:bootstrap')?.(event);
+    return event.returnValue?.layout;
   };
   const closeWindow = (harness: MainHarness, window: MainHarness['windows'][number]) => {
     window.handlers.get('close')?.();
@@ -540,6 +546,31 @@ describe('Electron persistence safety', () => {
       activePath: 'docs/current.md',
     });
     expect(harness.writeWindowState).not.toHaveBeenCalled();
+  });
+
+  test('shares simultaneous startup reads without retaining a stale snapshot', async () => {
+    const harness = loadMainHarness();
+    const first = harness.windows[0];
+    getFileMenuItems(harness)
+      .find((item) => item.label === 'New Window')
+      ?.click?.({}, first);
+    const load = harness.ipcHandlers.get('meetings:load-workspace')!;
+    const pending = createDeferred<StoredDocument[]>();
+    harness.listDocuments.mockReturnValueOnce(pending.promise);
+    const one = load({ sender: first.webContents });
+    const two = load({ sender: harness.windows[1].webContents });
+    expect(harness.listDocuments).toHaveBeenCalledOnce();
+    pending.resolve([]);
+    await Promise.all([one, two]);
+    const changed = { path: 'docs/example.md', content: '# New on disk', hash: 'new', mtimeMs: 1 };
+    harness.listDocuments.mockResolvedValueOnce([changed]);
+    await expect(load({ sender: first.webContents })).resolves.toMatchObject({
+      documents: [changed],
+    });
+    expect(harness.listDocuments).toHaveBeenCalledTimes(2);
+    harness.listDocuments.mockRejectedValueOnce(new Error('Fictional disk failure'));
+    await expect(load({ sender: first.webContents })).rejects.toThrow('Fictional disk failure');
+    await expect(load({ sender: first.webContents })).resolves.toMatchObject({ documents: [] });
   });
 
   test('honors an explicit workspace while retaining crashed windows for recovery', async () => {
@@ -678,9 +709,12 @@ describe('Electron persistence safety', () => {
     const harness = loadMainHarness('darwin', true, sessions);
     expect(harness.windows).toHaveLength(2);
     const keys = harness.windows.map((window) => {
-      const event = { sender: window.webContents, returnValue: undefined };
-      harness.ipcListeners.get('meetings:recovery-key')?.(event);
-      return event.returnValue;
+      const event = {
+        sender: window.webContents,
+        returnValue: undefined as { recoveryDraftKey: string } | undefined,
+      };
+      harness.ipcListeners.get('meetings:bootstrap')?.(event);
+      return event.returnValue?.recoveryDraftKey;
     });
     expect(keys[0]).toBe('notes.current-draft.v1');
     expect(keys[1]).toContain(sessions[1]!.recoveryId);
@@ -1206,6 +1240,17 @@ describe('Electron persistence safety', () => {
 });
 
 describe('system accent colors', () => {
+  test('shows a window only after the renderer commits its startup screen', () => {
+    const harness = loadMainHarness();
+    const window = harness.windows[0];
+    expect(window.show).not.toHaveBeenCalled();
+    harness.ipcListeners.get('meetings:renderer-ready')!({ sender: window.webContents });
+    expect(window.show).toHaveBeenCalledOnce();
+    window.handlers.get('close')!();
+    harness.ipcListeners.get('meetings:renderer-ready')!({ sender: window.webContents });
+    expect(window.show).toHaveBeenCalledOnce();
+  });
+
   test.each(['darwin', 'win32', 'linux'] as const)(
     'reads the accent and updates every %s window',
     (platform) => {
@@ -1214,9 +1259,12 @@ describe('system accent colors', () => {
       getFileMenuItems(harness)
         .find((item) => item.label === 'New Window')
         ?.click?.({}, windows[0]);
-      const event = { returnValue: null as string | null };
-      ipcListeners.get('meetings:system-accent')!(event);
-      expect(event.returnValue).toBe('#3478f6ff');
+      const event = {
+        sender: windows[0].webContents,
+        returnValue: { systemAccent: null as string | null },
+      };
+      ipcListeners.get('meetings:bootstrap')!(event);
+      expect(event.returnValue.systemAccent).toBe('#3478f6ff');
       systemPreferences.getAccentColor.mockReturnValue('a070ccff');
       if (platform === 'darwin') {
         expect(systemPreferences.subscribeNotification).toHaveBeenCalledWith(
@@ -1248,15 +1296,18 @@ describe('system accent colors', () => {
   );
 
   test('falls back to the CSS system color if a platform cannot provide an accent', () => {
-    const { ipcListeners, systemPreferences } = loadMainHarness('linux');
-    const event = { returnValue: '' as string | null };
+    const { ipcListeners, systemPreferences, windows } = loadMainHarness('linux');
+    const event = {
+      sender: windows[0].webContents,
+      returnValue: { systemAccent: null as string | null },
+    };
     systemPreferences.getAccentColor.mockImplementation(() => {
       throw new Error('unavailable');
     });
-    ipcListeners.get('meetings:system-accent')!(event);
-    expect(event.returnValue).toBeNull();
+    ipcListeners.get('meetings:bootstrap')!(event);
+    expect(event.returnValue.systemAccent).toBeNull();
     systemPreferences.getAccentColor.mockReturnValue('invalid');
-    ipcListeners.get('meetings:system-accent')!(event);
-    expect(event.returnValue).toBeNull();
+    ipcListeners.get('meetings:bootstrap')!(event);
+    expect(event.returnValue.systemAccent).toBeNull();
   });
 });
