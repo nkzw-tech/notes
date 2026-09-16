@@ -15,6 +15,8 @@
   --table-stripe: rgb(127 127 127 / 0.035);
   --text: #111;
   --selection: color-mix(in srgb, var(--accent) 10%, transparent);
+  --titlebar-height: 44px;
+  accent-color: var(--accent);
   color-scheme: light;
   font-family:
     Inter,
@@ -88,6 +90,20 @@ textarea {
 
 button {
   color: inherit;
+}
+
+/* Use fills for keyboard focus, including controls supplied by the editor. */
+:focus {
+  outline: none !important;
+}
+
+:is(button, input, textarea, select, summary, a):focus-visible {
+  box-shadow: none !important;
+}
+
+:is(button, select, summary, a):not(.sidebar-backdrop):focus-visible {
+  background-color: var(--accent-soft) !important;
+  color: var(--text) !important;
 }
 
 button:not(
@@ -197,7 +213,8 @@ html[data-meetings-platform='darwin'] .sidebar {
   align-items: center;
   display: flex;
   justify-content: flex-end;
-  min-height: 38px;
+  flex: none;
+  height: var(--titlebar-height);
   padding: 0 14px;
 }
 
@@ -244,7 +261,7 @@ html[data-meetings-platform='darwin'] a {
 }
 
 .search:focus-within {
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent);
+  background: var(--accent-soft);
 }
 
 .search input {
@@ -474,12 +491,12 @@ html[data-meetings-platform='darwin'] a {
   align-items: center;
   backdrop-filter: blur(20px);
   background: color-mix(in srgb, var(--app-bg) 82%, transparent);
-  border-bottom: 1px solid var(--sidebar-border);
+  box-shadow: inset 0 -1px var(--sidebar-border);
   display: flex;
   flex: none;
   gap: 12px;
-  min-height: 38px;
-  padding: 4px 16px;
+  height: var(--titlebar-height);
+  padding: 0 16px;
   position: relative;
   z-index: 10;
 }
@@ -496,7 +513,8 @@ html[data-meetings-platform='darwin'] .app-shell.document-palette-open .toolbar 
   filter: blur(4px);
 }
 
-.sidebar-toggle-button {
+.sidebar-toggle-button,
+.mobile-menu {
   -webkit-app-region: no-drag;
   align-items: center;
   background: transparent;
@@ -516,12 +534,14 @@ html[data-meetings-platform='darwin'] .app-shell.document-palette-open .toolbar 
   width: 28px;
 }
 
-.sidebar-toggle-button:hover {
+.sidebar-toggle-button:hover,
+.mobile-menu:hover {
   background: rgb(127 127 127 / 0.14);
   color: var(--sidebar-text);
 }
 
-.sidebar-toggle-button:active {
+.sidebar-toggle-button:active,
+.mobile-menu:active {
   background: rgb(127 127 127 / 0.2);
   color: var(--sidebar-text);
 }
@@ -531,22 +551,32 @@ html[data-meetings-platform='darwin'] .app-shell.document-palette-open .toolbar 
   stroke: none;
 }
 
+.sidebar-toggle-icon,
+.document-path {
+  transform: translateY(1px);
+}
+
 .document-path {
   align-items: center;
   color: var(--muted);
   display: flex;
   flex: 1;
-  font:
-    600 11px/1.2 ui-monospace,
-    SFMono-Regular,
-    Menlo,
-    monospace;
+  font-size: 13px;
+  font-weight: 450;
   gap: 7px;
+  height: 28px;
+  line-height: 20px;
   min-width: 0;
+}
+
+.document-path > span {
+  flex: none;
+  white-space: nowrap;
 }
 
 .document-path strong {
   color: var(--sidebar-text);
+  font-weight: 600;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -584,24 +614,6 @@ html[data-meetings-platform='darwin'] .app-shell.document-palette-open .toolbar 
   color: #c74440;
 }
 
-.toolbar-button {
-  align-items: center;
-  background: transparent;
-  border: 0;
-  border-radius: 11px;
-  corner-shape: squircle;
-  cursor: pointer;
-  display: inline-flex;
-  gap: 7px;
-  height: 34px;
-  justify-content: center;
-  padding: 0 9px;
-}
-
-.toolbar-button:hover {
-  background: var(--hover);
-}
-
 .mobile-menu {
   display: none;
 }
@@ -617,14 +629,20 @@ html[data-meetings-platform='darwin'] .app-shell.document-palette-open .toolbar 
   transition: background-color 180ms ease;
 }
 
-.mdx-editor-persistent,
-.mdx-editor-shell,
-.mdx-editor,
-.mdx-editor-notice {
+:root :is(.mdx-editor-persistent, .mdx-editor-shell, .mdx-editor, .mdx-editor-notice) {
+  --mdx-editor-default-accent: var(--accent);
+  --mdx-editor-default-accent-soft: var(--accent-soft);
+  --mdx-editor-default-annotation-bg: color-mix(in srgb, var(--accent) 22%, transparent);
+  --mdx-editor-default-annotation-active-bg: color-mix(in srgb, var(--accent) 32%, transparent);
   --mdx-editor-accent: var(--accent);
   --mdx-editor-accent-soft: var(--accent-soft);
   --mdx-editor-annotation-bg: color-mix(in srgb, var(--accent) 22%, transparent);
   --mdx-editor-annotation-active-bg: color-mix(in srgb, var(--accent) 32%, transparent);
+}
+
+.mdx-editor {
+  --admonitionCautionBg: var(--accent-soft);
+  --admonitionCautionBorder: color-mix(in srgb, var(--accent) 55%, transparent);
 }
 
 .meetings-markdown-editor {
@@ -650,6 +668,14 @@ html[data-meetings-platform='darwin'] .app-shell.document-palette-open .toolbar 
 .meetings-markdown-editor .mdx-editor-content li[role='checkbox'] {
   margin-inline-start: calc(-1rem - 6px);
   padding-left: 24px;
+}
+
+.meetings-markdown-editor .mdx-editor-content li[role='checkbox']:focus::before {
+  box-shadow: none;
+}
+
+.meetings-markdown-editor .mdx-editor-content li[role='checkbox']:focus-visible {
+  background: var(--accent-soft);
 }
 
 .mdx-editor-notice {
@@ -865,7 +891,7 @@ html[data-meetings-platform='darwin'] .app-shell.document-palette-open .toolbar 
 }
 
 .document-palette-input:focus {
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 32%, transparent);
+  background: var(--accent-soft);
 }
 
 .document-palette-input::placeholder {
@@ -1033,7 +1059,8 @@ html[data-meetings-platform='darwin'] .app-shell.document-palette-open .toolbar 
   }
 
   html[data-meetings-platform='darwin'] .app-shell.sidebar-collapsed .toolbar {
-    padding-left: 78px;
+    gap: 8px;
+    padding-left: 80px;
   }
 }
 
@@ -1042,8 +1069,13 @@ html[data-meetings-platform='darwin'] .app-shell.document-palette-open .toolbar 
     display: block;
   }
 
+  .main {
+    height: 100%;
+  }
+
   html[data-meetings-platform='darwin'] .toolbar {
-    padding-left: 78px;
+    gap: 8px;
+    padding-left: 80px;
   }
 
   html[data-meetings-platform='darwin'] .app-shell.mobile-navigation-open .toolbar {
@@ -1052,6 +1084,14 @@ html[data-meetings-platform='darwin'] .app-shell.document-palette-open .toolbar 
 
   .sidebar-resizer {
     display: none;
+  }
+
+  .sidebar,
+  .sidebar-backdrop {
+    transition:
+      transform 180ms ease,
+      opacity 180ms ease,
+      visibility 0s linear 180ms;
   }
 
   .sidebar {
@@ -1066,9 +1106,6 @@ html[data-meetings-platform='darwin'] .app-shell.document-palette-open .toolbar 
     position: fixed;
     top: 0;
     transform: translateX(-105%);
-    transition:
-      transform 180ms ease,
-      visibility 0s linear 180ms;
     visibility: hidden;
     width: 310px;
   }
@@ -1094,20 +1131,23 @@ html[data-meetings-platform='darwin'] .app-shell.document-palette-open .toolbar 
     border: 0;
     display: block;
     inset: 0;
+    opacity: 0;
+    pointer-events: none;
     position: fixed;
+    visibility: hidden;
     z-index: 15;
+  }
+
+  .app-shell.mobile-navigation-open .sidebar-backdrop {
+    opacity: 1;
+    pointer-events: auto;
+    transition-delay: 0s;
+    visibility: visible;
   }
 
   .mobile-close,
   .mobile-menu {
     display: inline-flex;
-  }
-
-  .mobile-menu {
-    border-radius: 8px;
-    height: 28px;
-    padding: 0;
-    width: 28px;
   }
 
   .sidebar-toggle-button {
@@ -1120,7 +1160,7 @@ html[data-meetings-platform='darwin'] .app-shell.document-palette-open .toolbar 
     left: min(264px, calc(100vw - 88px));
     justify-content: center;
     position: fixed;
-    top: 3px;
+    top: calc((var(--titlebar-height) - 32px) / 2);
     z-index: 22;
   }
 
@@ -1165,5 +1205,10 @@ html[data-meetings-platform='darwin'] .app-shell.document-palette-open .toolbar 
 
   .mobile-close {
     animation-delay: 0ms !important;
+  }
+
+  .sidebar,
+  .sidebar-backdrop {
+    transition-delay: 0s;
   }
 }

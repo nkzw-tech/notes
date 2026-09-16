@@ -31,7 +31,7 @@ import EditableMarkdown, {
   type EditableMarkdownHandle,
   type SaveStatus,
 } from './EditableMarkdown.tsx';
-import { ChevronIcon, MenuIcon, SearchIcon, SidebarSimpleIcon } from './icons.tsx';
+import { ChevronIcon, SearchIcon, SidebarSimpleIcon } from './icons.tsx';
 import { isSidebarToggleShortcut } from './sidebarVisibility.ts';
 import { useResizableSidebar } from './useResizableSidebar.ts';
 import { readWindowLayout, persistWindowLayout, type CollapsibleGroup } from './windowLayout.ts';
@@ -217,7 +217,11 @@ function App({
   }, [sidebarCollapsed, sidebarWidth, sectionExpanded, activeDocument?.path]);
 
   const toggleSidebar = useCallback(() => {
-    setSidebarCollapsed((current) => !current);
+    if (window.matchMedia('(max-width: 780px)').matches) {
+      setMobileNavigationOpen((current) => !current);
+    } else {
+      setSidebarCollapsed((current) => !current);
+    }
   }, []);
 
   const filteredDocuments = useMemo(() => {
@@ -666,7 +670,7 @@ function App({
             }
       }
     >
-      <aside className={`sidebar${mobileNavigationOpen ? ' mobile-open' : ''}`}>
+      <aside className={`sidebar${mobileNavigationOpen ? ' mobile-open' : ''}`} id="sidebar">
         <header className="sidebar-header" />
 
         <label className="search">
@@ -737,24 +741,24 @@ function App({
 
       <div aria-hidden className="sidebar-resizer" onPointerDown={resizeSidebar} />
 
+      <button
+        aria-hidden={!mobileNavigationOpen}
+        aria-label="Close navigation"
+        className="sidebar-backdrop"
+        disabled={!mobileNavigationOpen}
+        onClick={() => setMobileNavigationOpen(false)}
+        type="button"
+      />
       {mobileNavigationOpen ? (
-        <>
-          <button
-            aria-label="Close navigation"
-            className="sidebar-backdrop"
-            onClick={() => setMobileNavigationOpen(false)}
-            type="button"
-          />
-          <button
-            aria-label="Close navigation"
-            className="mobile-close"
-            onClick={() => setMobileNavigationOpen(false)}
-            onPointerDown={() => setMobileNavigationOpen(false)}
-            type="button"
-          >
-            ×
-          </button>
-        </>
+        <button
+          aria-label="Close navigation"
+          className="mobile-close"
+          onClick={() => setMobileNavigationOpen(false)}
+          onPointerDown={() => setMobileNavigationOpen(false)}
+          type="button"
+        >
+          ×
+        </button>
       ) : null}
 
       <main className="main">
@@ -769,17 +773,25 @@ function App({
             <SidebarSimpleIcon />
           </button>
           <button
+            aria-controls="sidebar"
+            aria-expanded={mobileNavigationOpen}
             aria-label="Open navigation"
-            className="toolbar-button mobile-menu"
+            className="mobile-menu"
             onClick={() => setMobileNavigationOpen(true)}
+            onPointerDown={(event) => {
+              if (event.button === 0) {
+                setMobileNavigationOpen(true);
+              }
+            }}
+            title="Expand sidebar (⌘⇧B)"
             type="button"
           >
-            <MenuIcon />
+            <SidebarSimpleIcon />
           </button>
-          <div className="document-path">
+          <div className="document-path" title={activeDocument.path}>
             <span>{activeDocument.group}</span>
             <ChevronIcon size={12} />
-            <strong>{activeDocument.path}</strong>
+            <strong>{activeDocument.title}</strong>
           </div>
           <div className="toolbar-actions">
             {saveIssue ? (

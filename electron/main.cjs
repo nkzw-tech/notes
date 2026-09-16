@@ -303,7 +303,8 @@ const createWindow = (sourceWindow, restoredSession) => {
     titleBarStyle: useMacVibrancy ? 'hiddenInset' : 'default',
     ...(useMacVibrancy
       ? {
-          trafficLightPosition: { x: 12, y: 12 },
+          // Center the 12px native controls in the 44px renderer title bar.
+          trafficLightPosition: { x: 12, y: 16 },
           transparent: true,
           vibrancy: 'under-window',
           visualEffectState: 'followWindow',
