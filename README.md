@@ -61,6 +61,12 @@ The packaged app is written to `out/Notes-darwin-arm64/Notes.app`. Signing and n
 
 Persistence changes must preserve the [save ownership rules and stress tests](docs/persistence.md). After building, `pnpm test:soak` exercises six real minutes of typing and a save-aware quit in a disposable Electron workspace.
 
+## Releases
+
+Pushing a version tag such as `v0.1.0` builds Linux x64 DEB/RPM packages and a Windows x64 portable ZIP, attaches them to a GitHub Release, and publishes it after both builds succeed. The tag must match the version in `package.json`.
+
+See [Distribution](docs/distribution.md) for the release commands, rebuilding existing release assets, and signing and uploading the macOS app.
+
 ## Privacy
 
 Workspace Markdown and metadata are loaded at runtime and excluded from the application bundle. The repository contains only generic starter templates and fictional test data. Please do not include personal workspaces in issues or pull requests.

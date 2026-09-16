@@ -1,20 +1,19 @@
 // @ts-check
 
-const { existsSync } = require('node:fs');
-const { join } = require('node:path');
+const { existsSync } = require("node:fs");
+const { join } = require("node:path");
 
-const iconPath = existsSync(join(__dirname, 'electron/icons/icon.icns'))
-  ? './electron/icons/icon'
+const electronCachePath = process.env.ELECTRON_CACHE || join(__dirname, ".cache/electron");
+const iconPath = existsSync(join(__dirname, "electron/icons/icon.icns"))
+  ? "./electron/icons/icon"
   : undefined;
 const osxNotarize =
-  process.env.APPLE_ID &&
-  process.env.APPLE_PASSWORD &&
-  process.env.APPLE_TEAM_ID
+  process.env.APPLE_ID && process.env.APPLE_PASSWORD && process.env.APPLE_TEAM_ID
     ? {
         appleId: process.env.APPLE_ID,
         appleIdPassword: process.env.APPLE_PASSWORD,
         teamId: process.env.APPLE_TEAM_ID,
-        tool: 'notarytool',
+        tool: "notarytool",
       }
     : undefined;
 const osxSign = process.env.APPLE_SIGNING_IDENTITY
@@ -23,7 +22,7 @@ const osxSign = process.env.APPLE_SIGNING_IDENTITY
       hardenedRuntime: true,
       identity: process.env.APPLE_SIGNING_IDENTITY,
       optionsForFile: () => ({
-        entitlements: join(__dirname, 'electron/entitlements.plist'),
+        entitlements: join(__dirname, "electron/entitlements.plist"),
       }),
     }
   : undefined;
@@ -32,16 +31,43 @@ const osxSign = process.env.APPLE_SIGNING_IDENTITY
 module.exports = {
   makers: [
     {
-      arch: ['arm64'],
-      name: '@electron-forge/maker-zip',
-      platforms: ['darwin'],
+      arch: ["arm64"],
+      name: "@electron-forge/maker-zip",
+      platforms: ["darwin"],
+    },
+    {
+      name: "@electron-forge/maker-zip",
+      platforms: ["win32"],
+    },
+    {
+      config: {
+        options: {
+          bin: "Notes",
+          icon: "./electron/icons/icon.png",
+          productName: "Notes",
+        },
+      },
+      name: "@electron-forge/maker-deb",
+    },
+    {
+      config: {
+        options: {
+          bin: "Notes",
+          icon: "./electron/icons/icon.png",
+          productName: "Notes",
+        },
+      },
+      name: "@electron-forge/maker-rpm",
     },
   ],
   packagerConfig: {
-    appBundleId: 'dev.nkzw-tech.notes',
-    appCopyright: 'Copyright (c) 2026-current Nakazawa Tech',
+    appBundleId: "dev.nkzw-tech.notes",
+    appCopyright: "Copyright (c) 2026-current Nakazawa Tech",
     asar: false,
-    executableName: 'Notes',
+    download: {
+      cacheRoot: electronCachePath,
+    },
+    executableName: "Notes",
     ...(iconPath ? { icon: iconPath } : {}),
     ignore: [
       /^\/\.DS_Store$/,
@@ -54,6 +80,7 @@ module.exports = {
       /^\/AGENTS\.md$/,
       /^\/CONTRIBUTING\.md$/,
       /^\/README\.md$/,
+      /^\/coverage(?:$|\/)/,
       /^\/document-service(?:\.test)?\.ts$/,
       /^\/config(?:$|\/)/,
       /^\/docs(?:$|\/)/,
@@ -63,6 +90,7 @@ module.exports = {
       /^\/interviews(?:$|\/)/,
       /^\/meetings(?:$|\/)/,
       /^\/out(?:$|\/)/,
+      /^\/packaging\.test\.ts$/,
       /^\/people(?:$|\/)/,
       /^\/pnpm-workspace\.yaml$/,
       /^\/public(?:$|\/)/,
@@ -73,7 +101,7 @@ module.exports = {
       /^\/vite\.config\./,
       /^\/workspace-metadata(?:\.test)?\.ts$/,
     ],
-    name: 'Notes',
+    name: "Notes",
     ...(osxNotarize ? { osxNotarize } : {}),
     ...(osxSign ? { osxSign } : {}),
   },
