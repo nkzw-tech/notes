@@ -1,5 +1,6 @@
 import {
   useCallback,
+  useEffect,
   useRef,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
@@ -8,6 +9,7 @@ import {
 import type { MeetingDocument } from './content.ts';
 import type { CreateDocumentKind, CreateDocumentRequest } from './documentApi.ts';
 import { filterPaletteDocuments, getPaletteDocumentTitle } from './documentPalette.ts';
+import { defaultWindowAppearance, type WindowAppearance } from './windowAppearance.ts';
 
 type PaletteMode = 'browse' | 'complete-interview' | 'delete-document' | 'kind' | 'name';
 
@@ -55,6 +57,9 @@ export function DocumentPalette({
   onCreate,
   onDeleteDocument,
   onNavigate,
+  onToggleAlwaysOnTop,
+  onToggleTransparency,
+  windowAppearance = defaultWindowAppearance,
 }: {
   activeDocument: MeetingDocument | undefined;
   documents: ReadonlyArray<MeetingDocument>;
@@ -64,6 +69,9 @@ export function DocumentPalette({
   onCreate: (request: CreateDocumentRequest) => Promise<void>;
   onDeleteDocument: (path: string) => Promise<void>;
   onNavigate: (path: string) => void;
+  onToggleAlwaysOnTop?: () => Promise<void>;
+  onToggleTransparency?: () => Promise<void>;
+  windowAppearance?: WindowAppearance;
 }) {
   const [creationKind, setCreationKind] = useState<CreateDocumentKind | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -89,7 +97,39 @@ export function DocumentPalette({
     !filesOnly &&
     mode === 'browse' &&
     (!normalizedQuery || destructiveSearchText.includes(normalizedQuery));
-  const browseActionCount = Number(showCreateAction) + Number(showDestructiveAction);
+  const windowActionStart = Number(showCreateAction) + Number(showDestructiveAction);
+  const windowActions = [
+    ...(onToggleTransparency
+      ? [
+          {
+            active: windowAppearance.enabled,
+            description: 'Clear Liquid Glass at 99% transparency',
+            label: 'Transparency mode',
+            marker: '◐',
+            run: onToggleTransparency,
+            search: 'transparency transparent clear glass opacity blur normal rendering visuals',
+          },
+        ]
+      : []),
+    ...(onToggleAlwaysOnTop
+      ? [
+          {
+            active: windowAppearance.alwaysOnTop,
+            description: 'Keep this window above other windows',
+            label: 'Keep window on top',
+            marker: '↑',
+            run: onToggleAlwaysOnTop,
+            search: 'always on top pin unpin floating',
+          },
+        ]
+      : []),
+  ].filter(
+    ({ label, search }) =>
+      !filesOnly &&
+      mode === 'browse' &&
+      (!normalizedQuery || `${label} ${search}`.toLocaleLowerCase().includes(normalizedQuery)),
+  );
+  const browseActionCount = windowActionStart + windowActions.length;
   const filteredKinds = documentKinds.filter(
     ({ description, label }) =>
       !normalizedQuery || `${label} ${description}`.toLocaleLowerCase().includes(normalizedQuery),
@@ -103,6 +143,37 @@ export function DocumentPalette({
           ? 0
           : 1;
   const clampedIndex = itemCount === 0 ? -1 : Math.min(selectedIndex, itemCount - 1);
+
+  const restoreEditorFocusRef = useRef(false);
+  useEffect(
+    () => () => {
+      if (restoreEditorFocusRef.current && document.activeElement === document.body) {
+        document
+          .querySelector<HTMLElement>('.mdx-editor-content[contenteditable=true]')
+          ?.focus({ preventScroll: true });
+      }
+    },
+    [],
+  );
+
+  const runWindowAction = useCallback(
+    async (run: () => Promise<void>) => {
+      if (isCreating) {
+        return;
+      }
+      setError(null);
+      setIsCreating(true);
+      try {
+        await run();
+        restoreEditorFocusRef.current = true;
+        onClose();
+      } catch (error) {
+        setError(error instanceof Error ? error.message : 'Could not update the window.');
+        setIsCreating(false);
+      }
+    },
+    [isCreating, onClose],
+  );
 
   const resetStep = useCallback((nextMode: PaletteMode) => {
     itemRefs.current = [];
@@ -192,6 +263,11 @@ export function DocumentPalette({
           resetStep(destructiveMode);
           return;
         }
+        const windowAction = windowActions[index - windowActionStart];
+        if (windowAction) {
+          void runWindowAction(windowAction.run);
+          return;
+        }
         const document = filteredDocuments[index - browseActionCount];
         if (document) {
           navigateAndClose(document);
@@ -227,6 +303,9 @@ export function DocumentPalette({
       resetStep,
       showCreateAction,
       showDestructiveAction,
+      windowActionStart,
+      windowActions,
+      runWindowAction,
     ],
   );
 
@@ -368,6 +447,30 @@ export function DocumentPalette({
                   </span>
                 </button>
               ) : null}
+              {windowActions.map((action, actionIndex) => {
+                const index = windowActionStart + actionIndex;
+                return (
+                  <button
+                    aria-pressed={action.active}
+                    className={`document-palette-item${clampedIndex === index ? ' selected' : ''}`}
+                    disabled={isCreating}
+                    key={action.label}
+                    onClick={() => void runWindowAction(action.run)}
+                    onPointerEnter={() => setSelectedIndex(index)}
+                    ref={(element) => {
+                      itemRefs.current[index] = element;
+                    }}
+                    type="button"
+                  >
+                    <span className="document-palette-marker">{action.marker}</span>
+                    <span className="document-palette-copy">
+                      <strong>{action.label}</strong>
+                      <span>{action.description}</span>
+                    </span>
+                    <span className="document-palette-group">{action.active ? 'On' : 'Off'}</span>
+                  </button>
+                );
+              })}
               {filteredDocuments.map((document, documentIndex) => {
                 const index = documentIndex + browseActionCount;
                 return (

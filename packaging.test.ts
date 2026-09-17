@@ -86,6 +86,8 @@ describe('packaged app boundaries', () => {
     expect(ignored('/electron/workspace-metadata.cjs')).toBe(false);
     expect(ignored('/electron/document-creation.cjs')).toBe(false);
     expect(ignored('/electron/document-service.cjs')).toBe(false);
+    expect(ignored('/electron/native/liquid-glass.node')).toBe(false);
+    expect(ignored('/native/liquid-glass.mm')).toBe(true);
     expect(ignored('/workspace-starter/AGENTS.md')).toBe(false);
     expect(ignored('/workspace-starter/config/workspace.json')).toBe(false);
   });

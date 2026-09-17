@@ -38,10 +38,14 @@ const {
 const { createWorkspaceSession } = require('./workspace-session.cjs');
 const { readOpenWindows, writeOpenWindows } = require('./open-windows.cjs');
 const { normalizeWindowLayout } = require('./window-layout.cjs');
+const { defaultWindowAppearance, normalizeWindowAppearance } = require('./window-appearance.cjs');
+const { isClearGlassAvailable, setClearGlass } = require('./liquid-glass.cjs');
 
 const appRoot = dirname(__dirname);
 const closingWindowIds = new Set();
 const windowSessions = new Map();
+// Window toggles are independent and start off after reopening the app.
+const windowAppearances = new Map();
 const workspaceSessions = new Map();
 let workspaceRoot = '';
 let explicitWorkspaceRoot = null;
@@ -329,6 +333,7 @@ const createWindow = ({ sourceWindow, restoredSession, openDocumentPicker = fals
   }
 
   const windowWebContentsId = window.webContents.id;
+  windowAppearances.set(windowWebContentsId, { ...defaultWindowAppearance });
   session.bounds = captureWindowBounds(window);
   windowSessions.set(windowWebContentsId, session);
   getWorkspaceSession(session.workspaceRoot);
@@ -369,6 +374,7 @@ const createWindow = ({ sourceWindow, restoredSession, openDocumentPicker = fals
       console.error('Failed to remember the last Notes window:', error);
     }
     windowSessions.delete(windowWebContentsId);
+    windowAppearances.delete(windowWebContentsId);
     persistOpenWindows();
   });
 
@@ -397,12 +403,59 @@ ipcMain.on('meetings:bootstrap', (event) => {
   const session = windowSessions.get(event.sender.id);
   event.returnValue = {
     layout: session?.layout ?? null,
+    windowAppearance: windowAppearances.get(event.sender.id),
+    clearGlassAvailable: process.platform === 'darwin' && isClearGlassAvailable(),
     recoveryDraftKey:
       session?.recoveryId === 'primary'
         ? 'notes.current-draft.v1'
         : `notes.current-draft.v1.${session.recoveryId}.${encodeURIComponent(session.workspaceRoot)}`,
     systemAccent: getSystemAccent(),
   };
+});
+ipcMain.handle('meetings:window-appearance', (event, value) => {
+  const appearance = normalizeWindowAppearance(value);
+  const window = BrowserWindow.getAllWindows().find(
+    (window) => !window.isDestroyed() && window.webContents === event.sender,
+  );
+  if (!window || !appearance) {
+    throw new Error('Window controls are not available.');
+  }
+  const previous = windowAppearances.get(event.sender.id) ?? defaultWindowAppearance;
+  if (
+    appearance.enabled &&
+    !previous.enabled &&
+    (process.platform !== 'darwin' || !isClearGlassAvailable())
+  ) {
+    throw new Error('Transparency mode requires Clear Liquid Glass support.');
+  }
+  const apply = (value, from) => {
+    if (value.enabled !== from.enabled) {
+      // Keep the text opaque, and avoid text-shaped shadows at 99% transparency.
+      window.setHasShadow(!value.enabled);
+      if (value.enabled) {
+        window.setVibrancy(null);
+        setClearGlass(window, true);
+      } else {
+        setClearGlass(window, false);
+        window.setVibrancy('under-window');
+      }
+    }
+    if (value.alwaysOnTop !== from.alwaysOnTop) {
+      window.setAlwaysOnTop(value.alwaysOnTop);
+    }
+  };
+  try {
+    apply(appearance, previous);
+  } catch (error) {
+    try {
+      apply(previous, appearance);
+    } catch (restoreError) {
+      console.error('Could not restore the previous window material:', restoreError);
+    }
+    throw error;
+  }
+  windowAppearances.set(event.sender.id, appearance);
+  return appearance;
 });
 ipcMain.on('meetings:renderer-ready', (event) => {
   const window = BrowserWindow.getAllWindows().find(

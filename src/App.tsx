@@ -34,6 +34,7 @@ import EditableMarkdown, {
 import { ChevronIcon, SearchIcon, SidebarSimpleIcon } from './icons.tsx';
 import { isSidebarToggleShortcut } from './sidebarVisibility.ts';
 import { useResizableSidebar } from './useResizableSidebar.ts';
+import { defaultWindowAppearance, type WindowAppearance } from './windowAppearance.ts';
 import { readWindowLayout, persistWindowLayout, type CollapsibleGroup } from './windowLayout.ts';
 
 const getPathFromHash = () =>
@@ -180,6 +181,23 @@ function App({
   const [documentPaletteScope, setDocumentPaletteScope] = useState<'all' | 'files' | null>(() =>
     activePath === null && !readRecoveryDraft() ? (documents.length ? 'files' : 'all') : null,
   );
+  const [windowAppearance, setWindowAppearance] = useState(
+    () => window.meetings?.initialWindowAppearance ?? defaultWindowAppearance,
+  );
+  useLayoutEffect(() => {
+    document.documentElement.dataset.notesTransparent = String(windowAppearance.enabled);
+    return () => {
+      delete document.documentElement.dataset.notesTransparent;
+    };
+  }, [windowAppearance.enabled]);
+
+  const updateWindowAppearance = useCallback(async (appearance: WindowAppearance) => {
+    const update = window.meetings?.updateWindowAppearance;
+    if (!update) {
+      throw new Error('Window controls are not available.');
+    }
+    setWindowAppearance(await update(appearance));
+  }, []);
   const [workspaceMetadataError, setWorkspaceMetadataError] = useState<string | null>(
     initialWorkspace?.metadataError ?? null,
   );
@@ -927,6 +945,25 @@ function App({
           onCreate={handleCreateDocument}
           onDeleteDocument={handleDeleteDocument}
           onNavigate={(path) => void handleNavigate(path)}
+          onToggleAlwaysOnTop={
+            window.meetings?.updateWindowAppearance
+              ? () =>
+                  updateWindowAppearance({
+                    ...windowAppearance,
+                    alwaysOnTop: !windowAppearance.alwaysOnTop,
+                  })
+              : undefined
+          }
+          onToggleTransparency={
+            window.meetings?.updateWindowAppearance && window.meetings.clearGlassAvailable
+              ? () =>
+                  updateWindowAppearance({
+                    ...windowAppearance,
+                    enabled: !windowAppearance.enabled,
+                  })
+              : undefined
+          }
+          windowAppearance={windowAppearance}
         />
       ) : null}
     </div>

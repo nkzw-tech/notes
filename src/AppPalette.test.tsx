@@ -6,6 +6,7 @@ import { afterEach, beforeEach, expect, test, vi } from 'vite-plus/test';
 import { completeInterview, deleteDocument, subscribeToDocumentChanges } from './documentApi.ts';
 import { readRecoveryDraft, writeRecoveryDraft } from './draftRecovery.ts';
 import type { EditableMarkdownHandle } from './EditableMarkdown.tsx';
+import type { WindowAppearance } from './windowAppearance.ts';
 
 const { flush } = vi.hoisted(() => ({ flush: vi.fn<() => Promise<boolean>>() }));
 
@@ -53,6 +54,7 @@ import App from './App.tsx';
 let root: Root;
 
 beforeEach(async () => {
+  HTMLElement.prototype.scrollIntoView = vi.fn();
   localStorage.clear();
   window.history.replaceState(null, '', '#/docs/todo.md');
   flush.mockResolvedValue(true);
@@ -173,6 +175,89 @@ const deletionActions = [
     remove: completeInterview,
   },
 ];
+
+const installAppearanceBridge = (clearGlassAvailable = true) => {
+  const updateWindowAppearance = vi.fn(async (appearance: WindowAppearance) => appearance);
+  Object.defineProperty(window, 'meetings', {
+    configurable: true,
+    value: { clearGlassAvailable, updateWindowAppearance },
+  });
+  return updateWindowAppearance;
+};
+
+const toggleWindowCommand = async (query: string, active: boolean) => {
+  await press('k', { metaKey: true });
+  await search(query);
+  const button = palette()!.querySelector('button')!;
+  expect(button.getAttribute('aria-pressed')).toBe(String(active));
+  expect(palette()!.querySelector('input[type="range"], select')).toBeNull();
+  await press('Enter');
+};
+
+test('Cmd+K offers independent transparency and keep-on-top toggles, without a configuration panel', async () => {
+  const update = installAppearanceBridge();
+  const editor = document.querySelector('textarea')!;
+  editor.classList.add('mdx-editor-content');
+  editor.setAttribute('contenteditable', 'true');
+  expect(document.documentElement.dataset.notesTransparent).toBe('false');
+  await toggleWindowCommand('keep window on top', false);
+  expect(update).toHaveBeenLastCalledWith({ alwaysOnTop: true, enabled: false });
+  expect(document.documentElement.dataset.notesTransparent).toBe('false');
+  expect(palette()).toBeNull();
+  expect(document.activeElement).toBe(editor);
+
+  await toggleWindowCommand('transparency', false);
+  expect(update).toHaveBeenLastCalledWith({ alwaysOnTop: true, enabled: true });
+  expect(document.documentElement.dataset.notesTransparent).toBe('true');
+  expect(palette()).toBeNull();
+
+  await toggleWindowCommand('transparency', true);
+  expect(update).toHaveBeenLastCalledWith({ alwaysOnTop: true, enabled: false });
+  expect(document.documentElement.dataset.notesTransparent).toBe('false');
+  await toggleWindowCommand('keep window on top', true);
+  expect(update).toHaveBeenLastCalledWith({ alwaysOnTop: false, enabled: false });
+  expect(flush).not.toHaveBeenCalled();
+});
+
+test('Cmd+P omits window toggles and full-palette document navigation accounts for both actions', async () => {
+  installAppearanceBridge();
+  await press('p', { metaKey: true });
+  await search('transparency');
+  expect(palette()!.textContent).toBe('No matching documents');
+  await search('keep window on top');
+  expect(palette()!.textContent).toBe('No matching documents');
+  await press('k', { metaKey: true });
+  for (let index = 0; index < 5; index++) {
+    await press('ArrowDown');
+  }
+  expect(palette()!.querySelector('.selected')!.textContent).toContain('Design Notes');
+  await press('Enter');
+  expect(flush).toHaveBeenCalledOnce();
+  expect(window.location.hash).toBe('#/docs/design.md');
+});
+
+test('keep-on-top is available without glass support', async () => {
+  const update = installAppearanceBridge(false);
+  await press('k', { metaKey: true });
+  await search('transparency');
+  expect(palette()!.textContent).toBe('No matching documents');
+  await search('keep window on top');
+  await press('Enter');
+  expect(update).toHaveBeenLastCalledWith({ alwaysOnTop: true, enabled: false });
+  expect(document.documentElement.dataset.notesTransparent).toBe('false');
+});
+
+test('a failed native toggle keeps the palette open, reports the error, and leaves the appearance unchanged', async () => {
+  const update = installAppearanceBridge();
+  update.mockRejectedValueOnce(new Error('Window is unavailable.'));
+  await press('k', { metaKey: true });
+  await search('transparency');
+  await press('Enter');
+  expect(document.documentElement.dataset.notesTransparent).toBe('false');
+  expect(palette()!.querySelector('[role="alert"]')!.textContent).toBe('Window is unavailable.');
+  expect(palette()!.querySelector('button')!.getAttribute('aria-pressed')).toBe('false');
+  expect(paletteInput().disabled).toBe(false);
+});
 
 const startDeletion = async (path: string, label: string) => {
   await act(async () => {

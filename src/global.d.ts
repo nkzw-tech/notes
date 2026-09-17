@@ -1,6 +1,7 @@
 import type { StoredDocument } from './content.ts';
 import type { DocumentChangeEvent } from './documentApi.ts';
 import type { WorkspaceMetadataChangeEvent, WorkspaceSnapshot } from './documentApi.ts';
+import type { WindowAppearance } from './windowAppearance.ts';
 import type { WindowLayout } from './windowLayout.ts';
 
 type SaveDocumentResult =
@@ -20,6 +21,7 @@ declare global {
       chooseWorkspace: () => Promise<
         { canceled: true; workspacePath?: never } | { canceled: false; workspacePath: string }
       >;
+      clearGlassAvailable?: boolean;
       closeWindowIfOthersOpen?: () => Promise<boolean>;
       completeInterview: (request: { path: string }) => Promise<{ path: string }>;
       createDocument: (request: {
@@ -28,6 +30,7 @@ declare global {
       }) => Promise<StoredDocument>;
       deleteDocument: (request: { path: string }) => Promise<{ path: string }>;
       formatDocument: (request: { content: string; path: string }) => Promise<string>;
+      initialWindowAppearance?: WindowAppearance;
       initialWindowLayout?: WindowLayout | null;
       loadWorkspace: () => Promise<WorkspaceSnapshot>;
       onChooseWorkspaceRequested: (callback: () => void) => () => void;
@@ -48,6 +51,7 @@ declare global {
         },
         keepalive: boolean,
       ) => Promise<SaveDocumentResult> | SaveDocumentResult;
+      updateWindowAppearance?: (appearance: WindowAppearance) => Promise<WindowAppearance>;
       updateWindowState?: (state: { activePath?: string | null; layout: WindowLayout }) => void;
     };
   }

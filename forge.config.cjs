@@ -106,6 +106,7 @@ module.exports = {
       /^\/index\.html$/,
       /^\/interviews(?:$|\/)/,
       /^\/meetings(?:$|\/)/,
+      /^\/native(?:$|\/)/,
       /^\/out(?:$|\/)/,
       /^\/packaging\.test\.ts$/,
       /^\/people(?:$|\/)/,

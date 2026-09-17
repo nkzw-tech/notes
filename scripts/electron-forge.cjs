@@ -3,6 +3,14 @@
 const { existsSync } = require('node:fs');
 const { dirname, join } = require('node:path');
 const { spawnSync } = require('node:child_process');
+const { buildNative } = require('./build-native.cjs');
+
+const platformArgument = process.argv.find((argument) => argument.startsWith('--platform='));
+const platformIndex = process.argv.indexOf('--platform');
+buildNative(
+  platformArgument?.slice('--platform='.length) ??
+    (platformIndex >= 0 ? process.argv[platformIndex + 1] : process.platform),
+);
 
 const installedNode22 = [
   process.env.ELECTRON_FORGE_NODE,

@@ -67,6 +67,10 @@ ipcRenderer.on('meetings:system-accent-changed', (_event, color) => {
 });
 
 const meetings = {
+  clearGlassAvailable: bootstrap.clearGlassAvailable === true,
+  initialWindowAppearance: bootstrap.windowAppearance,
+  updateWindowAppearance: (appearance) =>
+    ipcRenderer.invoke('meetings:window-appearance', appearance),
   initialWindowLayout: bootstrap.layout,
   updateWindowState: (state) => ipcRenderer.send('meetings:window-state', state),
   cancelClose: () => ipcRenderer.send('meetings:cancel-close'),

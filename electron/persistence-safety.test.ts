@@ -63,6 +63,7 @@ const loadMainHarness = (
   const watcherCallbacks: Array<(eventType: string, filename: string | Buffer | null) => void> = [];
   const sentChanges: unknown[] = [];
   const sentChannels: string[] = [];
+  const glass = { isClearGlassAvailable: vi.fn(() => true), setClearGlass: vi.fn() };
   let applicationMenu: unknown[] = [];
 
   const readDocument = vi.fn<(root: string, path: string) => Promise<StoredDocument>>();
@@ -179,6 +180,9 @@ const loadMainHarness = (
     once(_event: string, _callback: (...arguments_: unknown[]) => void) {}
     restore() {}
     setFullScreen(_value: boolean) {}
+    setVibrancy = vi.fn();
+    setAlwaysOnTop = vi.fn();
+    setHasShadow = vi.fn();
     show = vi.fn();
   }
 
@@ -270,6 +274,9 @@ const loadMainHarness = (
     if (specifier === './open-windows.cjs') {
       return { readOpenWindows: () => restoredWindows, writeOpenWindows };
     }
+    if (specifier === './liquid-glass.cjs') {
+      return glass;
+    }
     if (specifier === 'electron') {
       return electron;
     }
@@ -346,6 +353,7 @@ const loadMainHarness = (
 
   return {
     app,
+    glass,
     appEvents,
     createWorkspaceDocument,
     restoreDocument,
@@ -1313,6 +1321,100 @@ describe('system accent colors', () => {
     window.handlers.get('close')!();
     harness.ipcListeners.get('meetings:renderer-ready')!({ sender: window.webContents });
     expect(window.show).toHaveBeenCalledOnce();
+  });
+
+  test('transparency and keep-on-top are independent and affect only their own window', () => {
+    const harness = loadMainHarness('darwin');
+    const { glass, ipcHandlers, ipcListeners, windows } = harness;
+    getFileMenuItems(harness)
+      .find((item) => item.label === 'New Window')
+      ?.click?.({}, windows[0]);
+    const [first, second] = windows;
+    const event = { sender: first.webContents, returnValue: {} as Record<string, unknown> };
+    const update = ipcHandlers.get('meetings:window-appearance')!;
+    ipcListeners.get('meetings:bootstrap')!(event);
+    expect(event.returnValue.windowAppearance).toEqual({ enabled: false, alwaysOnTop: false });
+
+    update(event, { enabled: true, alwaysOnTop: false });
+    expect(first.setVibrancy).toHaveBeenLastCalledWith(null);
+    expect(first.setHasShadow).toHaveBeenLastCalledWith(false);
+    expect(glass.setClearGlass).toHaveBeenLastCalledWith(first, true);
+    expect(first.setAlwaysOnTop).not.toHaveBeenCalled();
+    update(event, { enabled: true, alwaysOnTop: true });
+    expect(first.setAlwaysOnTop).toHaveBeenLastCalledWith(true);
+    expect(glass.setClearGlass).toHaveBeenCalledTimes(1);
+    expect(first.setVibrancy).toHaveBeenCalledTimes(1);
+    expect(first.setHasShadow).toHaveBeenCalledTimes(1);
+    update(event, { enabled: false, alwaysOnTop: true });
+    expect(glass.setClearGlass).toHaveBeenLastCalledWith(first, false);
+    expect(first.setVibrancy).toHaveBeenLastCalledWith('under-window');
+    expect(first.setHasShadow).toHaveBeenLastCalledWith(true);
+    expect(first.setAlwaysOnTop).toHaveBeenCalledTimes(1);
+    ipcListeners.get('meetings:bootstrap')!(event);
+    expect(event.returnValue.windowAppearance).toEqual({ enabled: false, alwaysOnTop: true });
+    update(event, { enabled: false, alwaysOnTop: false });
+    expect(first.setAlwaysOnTop).toHaveBeenLastCalledWith(false);
+    expect(glass.setClearGlass).toHaveBeenCalledTimes(2);
+    expect(second.setAlwaysOnTop).not.toHaveBeenCalled();
+    expect(second.setVibrancy).not.toHaveBeenCalled();
+  });
+
+  test.each(['darwin', 'win32', 'linux'])(
+    'keep-on-top works on %s without touching appearance or requiring glass',
+    (platform) => {
+      const { glass, ipcHandlers, windows } = loadMainHarness(platform);
+      glass.isClearGlassAvailable.mockReturnValue(false);
+      const update = ipcHandlers.get('meetings:window-appearance')!;
+      const event = { sender: windows[0].webContents };
+      update(event, { enabled: false, alwaysOnTop: true });
+      expect(windows[0].setAlwaysOnTop).toHaveBeenLastCalledWith(true);
+      expect(windows[0].setHasShadow).not.toHaveBeenCalled();
+      expect(windows[0].setVibrancy).not.toHaveBeenCalled();
+      expect(glass.setClearGlass).not.toHaveBeenCalled();
+    },
+  );
+
+  test('window controls validate both toggles and cannot configure intermediate appearances', () => {
+    const { ipcHandlers, windows } = loadMainHarness('darwin');
+    const update = ipcHandlers.get('meetings:window-appearance')!;
+    const event = { sender: windows[0].webContents };
+    for (const value of [
+      null,
+      {},
+      { enabled: true },
+      { enabled: 'yes', alwaysOnTop: false },
+      { enabled: false, alwaysOnTop: 'yes' },
+    ]) {
+      expect(() => update(event, value)).toThrow('not available');
+    }
+    expect(windows[0].setVibrancy).not.toHaveBeenCalled();
+    expect(
+      update(event, { enabled: true, alwaysOnTop: false, transparency: 50, blur: 'system' }),
+    ).toEqual({ enabled: true, alwaysOnTop: false });
+    expect(windows[0].setVibrancy).toHaveBeenLastCalledWith(null);
+  });
+
+  test('unavailable or failed glass preserves an independently pinned normal window', () => {
+    const { glass, ipcHandlers, ipcListeners, windows } = loadMainHarness('darwin');
+    const event = { sender: windows[0].webContents, returnValue: {} as Record<string, unknown> };
+    const update = ipcHandlers.get('meetings:window-appearance')!;
+    update(event, { enabled: false, alwaysOnTop: true });
+    glass.isClearGlassAvailable.mockReturnValue(false);
+    expect(() => update(event, { enabled: true, alwaysOnTop: true })).toThrow(
+      'requires Clear Liquid Glass',
+    );
+    expect(windows[0].setVibrancy).not.toHaveBeenCalled();
+    glass.isClearGlassAvailable.mockReturnValue(true);
+    glass.setClearGlass.mockImplementationOnce(() => {
+      throw new Error('Native failure');
+    });
+    expect(() => update(event, { enabled: true, alwaysOnTop: true })).toThrow('Native failure');
+    expect(glass.setClearGlass).toHaveBeenLastCalledWith(windows[0], false);
+    expect(windows[0].setVibrancy).toHaveBeenLastCalledWith('under-window');
+    expect(windows[0].setHasShadow).toHaveBeenLastCalledWith(true);
+    expect(windows[0].setAlwaysOnTop).toHaveBeenCalledTimes(1);
+    ipcListeners.get('meetings:bootstrap')!(event);
+    expect(event.returnValue.windowAppearance).toEqual({ enabled: false, alwaysOnTop: true });
   });
 
   test.each(['darwin', 'win32', 'linux'] as const)(

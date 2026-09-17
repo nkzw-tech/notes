@@ -3,6 +3,8 @@ dist/
 out/
 coverage/
 .cache/
+electron/native/*.node
+electron/native/*.tmp
 
 *.log
 .DS_Store

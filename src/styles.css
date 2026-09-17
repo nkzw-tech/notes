@@ -1212,3 +1212,22 @@ html[data-meetings-platform='darwin'] .app-shell.document-palette-open .toolbar 
     transition-delay: 0s;
   }
 }
+
+/* Transparency mode uses one fixed 1% tint across the whole window. */
+html[data-meetings-platform='darwin'][data-notes-transparent='true'] {
+  --card-bg: transparent;
+  --code-bg: color-mix(in srgb, var(--text) 6%, transparent);
+  --sidebar-vibrancy-tint: transparent;
+}
+
+html[data-meetings-platform='darwin'][data-notes-transparent='true']
+  :is(.app-shell, #root > .app-state) {
+  background: color-mix(in srgb, var(--app-bg) 1%, transparent);
+}
+
+html[data-meetings-platform='darwin'][data-notes-transparent='true']
+  :is(.main, .toolbar, .sidebar, .app-shell .app-state) {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  background: transparent;
+}
