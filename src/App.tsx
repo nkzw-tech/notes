@@ -214,6 +214,7 @@ function App({
   });
   const [query, setQuery] = useState('');
   const [saveIssue, setSaveIssue] = useState<SaveIssue | null>(null);
+  const [clipboardError, setClipboardError] = useState<string | null>(null);
   const [initialLayout] = useState(readWindowLayout);
   const [sectionExpanded, setSectionExpanded] = useState(initialLayout.sectionExpanded);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(initialLayout.sidebarCollapsed);
@@ -500,6 +501,27 @@ function App({
         return;
       }
 
+      if (commandKey && event.shiftKey && !event.altKey && key === 'c' && !documentPaletteScope) {
+        const markdown = editorRef.current?.getMarkdown();
+        if (markdown === null || markdown === undefined) {
+          return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        const copy =
+          window.meetings?.copyMarkdown?.(markdown) ?? navigator.clipboard?.writeText(markdown);
+        if (copy) {
+          void copy
+            .then(() => setClipboardError(null))
+            .catch(() => {
+              setClipboardError('Could not copy Markdown to the clipboard.');
+            });
+        } else {
+          setClipboardError('Clipboard access is unavailable.');
+        }
+        return;
+      }
+
       if (isSidebarToggleShortcut(event)) {
         event.preventDefault();
         event.stopPropagation();
@@ -533,7 +555,7 @@ function App({
 
     window.addEventListener('keydown', onKeyDown, { capture: true });
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true });
-  }, [toggleSidebar]);
+  }, [documentPaletteScope, toggleSidebar]);
 
   const handleStoredChange = (storedDocument: StoredDocument) => {
     setDocuments((current) => replaceDocument(current, storedDocument, peoplePathsRef.current));
@@ -838,11 +860,16 @@ function App({
           </div>
         </header>
 
-        {loadError || workspaceMetadataError || closeBlockedError || activeDeletedPath ? (
+        {loadError ||
+        workspaceMetadataError ||
+        closeBlockedError ||
+        clipboardError ||
+        activeDeletedPath ? (
           <div className="load-error" role="alert">
             {loadError ??
               workspaceMetadataError ??
               closeBlockedError ??
+              clipboardError ??
               (activeDeletedPath ? (
                 <>
                   The active file was deleted. Your current text is preserved.{' '}

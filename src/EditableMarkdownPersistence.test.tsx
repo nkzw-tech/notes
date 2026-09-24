@@ -102,6 +102,27 @@ const randomFor = (seed: number) => () => {
   return seed / 0x1_00_00_00_00;
 };
 
+test('exposes the current unsaved Markdown for copying', async () => {
+  const ref = createRef<EditableMarkdownHandle>();
+  await act(async () => {
+    root.render(
+      <EditableMarkdown
+        document={createMeetingDocument(initial, new Set())}
+        onLocalChange={vi.fn()}
+        onNavigate={vi.fn()}
+        onStatusChange={vi.fn()}
+        onStoredChange={vi.fn()}
+        ref={ref}
+        resolveLink={() => null}
+      />,
+    );
+  });
+
+  await act(async () => observed.editor!.setMarkdown('# Latest *draft*'));
+  expect(ref.current!.getMarkdown()).toBe('# Latest *draft*');
+  expect(disk.content).toBe('Original\n');
+});
+
 test.each([1, 17, 73, 2026])(
   'six minutes of typing with delayed saves and stale renders (seed %i)',
   async (seed) => {

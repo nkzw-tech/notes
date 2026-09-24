@@ -13,6 +13,7 @@ vi.mock('./EditableMarkdown.tsx', () => ({
       applyExternalChange: vi.fn(),
       flush,
       formatAndSave: vi.fn().mockResolvedValue(true),
+      getMarkdown: () => '',
       hasUnsavedChanges: () => false,
       restoreDeletedDocument: vi.fn().mockResolvedValue(true),
     }));

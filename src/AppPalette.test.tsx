@@ -8,7 +8,10 @@ import { readRecoveryDraft, writeRecoveryDraft } from './draftRecovery.ts';
 import type { EditableMarkdownHandle } from './EditableMarkdown.tsx';
 import type { WindowAppearance } from './windowAppearance.ts';
 
-const { flush } = vi.hoisted(() => ({ flush: vi.fn<() => Promise<boolean>>() }));
+const { flush, getMarkdown } = vi.hoisted(() => ({
+  flush: vi.fn<() => Promise<boolean>>(),
+  getMarkdown: vi.fn<() => string>(),
+}));
 
 vi.mock('./EditableMarkdown.tsx', () => ({
   default: function FakeEditor({ ref }: { ref: React.Ref<EditableMarkdownHandle> }) {
@@ -16,6 +19,7 @@ vi.mock('./EditableMarkdown.tsx', () => ({
       applyExternalChange: vi.fn(),
       flush,
       formatAndSave: vi.fn().mockResolvedValue(true),
+      getMarkdown,
       hasUnsavedChanges: () => false,
       restoreDeletedDocument: vi.fn().mockResolvedValue(true),
     }));
@@ -58,6 +62,7 @@ beforeEach(async () => {
   localStorage.clear();
   window.history.replaceState(null, '', '#/docs/todo.md');
   flush.mockResolvedValue(true);
+  getMarkdown.mockReturnValue('# Unsaved *draft*');
   const container = document.createElement('div');
   document.body.append(container);
   root = createRoot(container);
@@ -94,6 +99,27 @@ const search = async (value: string) => {
     paletteInput().dispatchEvent(new Event('input', { bubbles: true }));
   });
 };
+
+test.each(['metaKey', 'ctrlKey'])(
+  '%s+Shift+C copies the live Markdown without saving or changing the selected note',
+  async (modifier) => {
+    const copyMarkdown = vi.fn(async () => {});
+    window.meetings = { copyMarkdown } as unknown as Window['meetings'];
+    document.querySelector('textarea')!.focus();
+    const shortcut = await press('c', { [modifier]: true, shiftKey: true });
+    expect(shortcut.defaultPrevented).toBe(true);
+    expect(copyMarkdown).toHaveBeenCalledExactlyOnceWith('# Unsaved *draft*');
+    expect(flush).not.toHaveBeenCalled();
+    expect(window.location.hash).toBe('#/docs/todo.md');
+
+    expect((await press('c', { [modifier]: true })).defaultPrevented).toBe(false);
+    expect(copyMarkdown).toHaveBeenCalledTimes(1);
+
+    await press('k', { [modifier]: true });
+    expect((await press('c', { [modifier]: true, shiftKey: true })).defaultPrevented).toBe(false);
+    expect(copyMarkdown).toHaveBeenCalledTimes(1);
+  },
+);
 
 test.each(['metaKey', 'ctrlKey'])(
   '%s+P searches only files and saves before switching',

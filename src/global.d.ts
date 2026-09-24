@@ -24,6 +24,7 @@ declare global {
       clearGlassAvailable?: boolean;
       closeWindowIfOthersOpen?: () => Promise<boolean>;
       completeInterview: (request: { path: string }) => Promise<{ path: string }>;
+      copyMarkdown: (content: string) => Promise<void>;
       createDocument: (request: {
         kind: 'doc' | 'interview' | 'person' | 'report';
         title: string;

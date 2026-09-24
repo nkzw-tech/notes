@@ -69,6 +69,7 @@ export type EditableMarkdownHandle = {
   applyExternalChange: (document: StoredDocument) => void;
   flush: () => Promise<boolean>;
   formatAndSave: () => Promise<boolean>;
+  getMarkdown: () => string | null;
   hasUnsavedChanges: () => boolean;
   restoreDeletedDocument: () => Promise<boolean>;
 };
@@ -273,6 +274,9 @@ export const EditableMarkdown = forwardRef<
 
         formatAndSaveRef.current = request;
         return request;
+      },
+      getMarkdown() {
+        return editorRef.current?.getMarkdown() ?? null;
       },
       hasUnsavedChanges() {
         return (

@@ -16,6 +16,7 @@ test('uses asynchronous saves normally and synchronous saves only for lifecycle 
     updateWindowState: (state: unknown) => void;
     cancelClose: () => void;
     closeWindowIfOthersOpen: () => Promise<boolean>;
+    copyMarkdown: (content: string) => Promise<void>;
     chooseWorkspace: () => Promise<unknown>;
     completeInterview: (request: { path: string }) => Promise<unknown>;
     createDocument: (request: { kind: 'doc'; title: string }) => Promise<unknown>;
@@ -74,6 +75,8 @@ test('uses asynchronous saves normally and synchronous saves only for lifecycle 
   expect(send).toHaveBeenCalledWith('meetings:cancel-close');
   await exposedMeetings!.closeWindowIfOthersOpen();
   expect(invoke).toHaveBeenCalledWith('meetings:close-window-if-others-open');
+  await exposedMeetings!.copyMarkdown('# Live note');
+  expect(invoke).toHaveBeenCalledWith('meetings:copy-markdown', '# Live note');
 
   const request = {
     baseHash: 'old',

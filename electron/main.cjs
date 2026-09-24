@@ -6,6 +6,7 @@ const { pathToFileURL } = require('node:url');
 const {
   app,
   BrowserWindow,
+  clipboard,
   dialog,
   ipcMain,
   Menu,
@@ -499,6 +500,13 @@ ipcMain.handle('meetings:close-window-if-others-open', (event) => {
   }
   window.close();
   return true;
+});
+ipcMain.handle('meetings:copy-markdown', (event, content) => {
+  sessionForSender(event.sender);
+  if (typeof content !== 'string') {
+    throw new TypeError('Markdown content must be a string.');
+  }
+  clipboard.writeText(content);
 });
 ipcMain.handle('meetings:load-workspace', (event) =>
   sessionForSender(event.sender).loadWorkspaceSnapshot(),

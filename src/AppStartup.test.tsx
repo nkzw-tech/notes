@@ -21,6 +21,7 @@ vi.mock('./EditableMarkdown.tsx', () => ({
       applyExternalChange,
       flush: async () => true,
       formatAndSave: async () => true,
+      getMarkdown: () => document.content,
       hasUnsavedChanges: () => false,
       restoreDeletedDocument: async () => true,
     }));

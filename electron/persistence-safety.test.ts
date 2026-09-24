@@ -64,6 +64,7 @@ const loadMainHarness = (
   const sentChanges: unknown[] = [];
   const sentChannels: string[] = [];
   const glass = { isClearGlassAvailable: vi.fn(() => true), setClearGlass: vi.fn() };
+  const clipboard = { writeText: vi.fn() };
   let applicationMenu: unknown[] = [];
 
   const readDocument = vi.fn<(root: string, path: string) => Promise<StoredDocument>>();
@@ -198,6 +199,7 @@ const loadMainHarness = (
   const electron = {
     app,
     BrowserWindow: FakeBrowserWindow,
+    clipboard,
     dialog: { showOpenDialog },
     ipcMain: {
       handle: (channel: string, callback: (...arguments_: unknown[]) => unknown) => {
@@ -353,6 +355,7 @@ const loadMainHarness = (
 
   return {
     app,
+    clipboard,
     glass,
     appEvents,
     createWorkspaceDocument,
@@ -451,6 +454,17 @@ describe('Electron persistence safety', () => {
     harness.ipcListeners.get('meetings:bootstrap')?.(event);
     return event.returnValue?.layout;
   };
+
+  test('copies the supplied live Markdown through the native clipboard', () => {
+    const harness = loadMainHarness();
+    const copy = harness.ipcHandlers.get('meetings:copy-markdown')!;
+    const event = { sender: harness.windows[0]!.webContents };
+
+    copy(event, '# Unsaved *draft*');
+    expect(harness.clipboard.writeText).toHaveBeenCalledExactlyOnceWith('# Unsaved *draft*');
+    expect(() => copy(event, null)).toThrow('Markdown content must be a string.');
+    expect(harness.clipboard.writeText).toHaveBeenCalledTimes(1);
+  });
   const closeWindow = (harness: MainHarness, window: MainHarness['windows'][number]) => {
     window.handlers.get('close')?.();
     window.handlers.get('closed')?.();

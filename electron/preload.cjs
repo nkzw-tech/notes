@@ -75,6 +75,7 @@ const meetings = {
   updateWindowState: (state) => ipcRenderer.send('meetings:window-state', state),
   cancelClose: () => ipcRenderer.send('meetings:cancel-close'),
   closeWindowIfOthersOpen: () => ipcRenderer.invoke('meetings:close-window-if-others-open'),
+  copyMarkdown: (content) => ipcRenderer.invoke('meetings:copy-markdown', content),
   recoveryDraftKey: bootstrap.recoveryDraftKey,
   chooseWorkspace: () => ipcRenderer.invoke('meetings:choose-workspace'),
   completeInterview: (request) => ipcRenderer.invoke('meetings:complete-interview', request),
